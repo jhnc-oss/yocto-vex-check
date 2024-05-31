@@ -1,0 +1,59 @@
+This tool allows to check SBOMs for vulnerabilities. You can take SBOM/VEX of a
+Yocto Project build and generate a fresh vulnerability status.
+
+It uses the SPDX archive as the list of packages to check, with the additional
+information from the VEX class.
+
+WARNING: this tool is under active development, file formats and options do
+change regularly.
+
+Functionalities:
+- reads YP SPDX 2.2 files and YP cve-check JSON files
+- converts SPDX/cve-check JSON to VEX (close to OpenVEX)
+- performs a check for vulnerabilities taking the VEX and using the specified database
+- uses output of the "vex" class of OpenEmbedded-core
+
+How to use:
+1. Download the database to use:
+- for NVD, use cve-update-nvd2-native.py
+- for the CVE database, get the CVEv5 git repository: either the upsteam one at https://github.com/CVEProject/cvelistV5
+  or the one with OE-related fixes at https://github.com/mrybczyn/cvelistV5-overrides (recommended)
+
+2. Enable the vex class in your YP-based distribution build by adding to your local.conf:
+
+INHERIT += "vex"
+
+3. Build your image as usual and note the location of the CVE JSON file (in the output
+   of the build)
+
+4. (Recommended for production builds) archive the CVE JSON file and the SPDX archive
+
+5. Use the tool as described below at any moment to generate a fresh vulnerability status
+
+6. (Optional) You can convert the output to text or CSV format using scripts/cve-report.py
+
+Descrition of tools:
+
+The high-level wrapper performs the whole process of a given database. The usage is as follows:
+./wrap-yocto-vex-check.py -i <cve-check-JSON-file> -o <output_dir> -t <temporary_dir> -b <build directory like tmp-glibc> -db <database path> -db-type <database type>
+where:
+-i <cve-check-JSON-file> is the CVE JSON file as given in the output of the build
+-o <output_dir> is the output directory for the updated CVE file
+-t <temporary_dir> is a temporary directory used during the scan
+-b <build directory like tmp-glibc> is the build directory that contains the SPDX archive
+-db <database path> is the path to the database file (NVD) or downloaded git repository (CVE)
+-db-type <database type> is the database type: NVD or CVE
+
+Lower-level tools:
+- cve-update-nvd2-native.py - allows to download the NVD database
+- yocto-vex-check.py - step-by-step conversions; imports SPDX archive, allows to convert SPDX+CVE JSON
+  to VEX, runs the vulnerability check on the given database
+
+Limitations:
+- today the SPDX generation in YP works for images and SDK, not for the world build
+- the MITRE (CVE) database contains a number of difficult-to-parse entries; especially before 2024
+
+LICENCE: MIT
+
+
+

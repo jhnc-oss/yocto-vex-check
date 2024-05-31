@@ -1,0 +1,18 @@
+VEX_STATUS = {}
+
+VEX_STATUS["unpatched"] = "affected"
+VEX_STATUS["upstream-wontfix"] = "affected"
+VEX_STATUS["disputed"] = "affected"
+VEX_STATUS["version-in-range"] = "affected"
+VEX_STATUS["patched"] = "fixed"
+VEX_STATUS["fixed"] = "fixed"
+VEX_STATUS["fix-file-included"] = "fixed"
+VEX_STATUS["backported-patch"] = "fixed"
+VEX_STATUS["cpe-stable-backport"] = "fixed"
+VEX_STATUS["fixed-version"] = "fixed"
+VEX_STATUS["version-not-in-range"] = "fixed"
+VEX_STATUS["not-applicable-platform"] = "not-affected"
+VEX_STATUS["cpe-incorrect"] = "not-affected"
+VEX_STATUS["not-applicable-config"] = "not-affected"
+VEX_STATUS["ignored"] = "not-affected"
+VEX_STATUS["vulnerable-investigating"] = "under-investigation"

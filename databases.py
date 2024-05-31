@@ -1,0 +1,503 @@
+#!/bin/env python3
+#
+# Copyright OpenEmbedded Contributors
+#
+# SPDX-License-Identifier: MIT
+#
+from abc import abstractmethod
+import os
+import sqlite3
+import json
+import re
+from cve_check_lib import (
+    Version,
+    convert_cve_version,
+    decode_cve_status,
+    get_related_vexs,
+)
+
+
+def cve_is_ignored(d, cve_data, cve):
+    if cve not in cve_data:
+        return False
+    if cve_data[cve]["abbrev-status"] == "Ignored":
+        return True
+    return False
+
+
+def cve_is_patched(d, cve_data, cve):
+    if cve not in cve_data:
+        return False
+    if cve_data[cve]["abbrev-status"] == "Patched":
+        return True
+    return False
+
+
+def cve_update(d, cve_data, cve, entry):
+    # If no entry, just add it
+    if cve not in cve_data:
+        cve_data[cve] = entry
+        return
+    # If we are updating, there might be change in the status
+    d.logger.debug(
+        "Trying CVE entry update for %s from %s to %s"
+        % (cve, cve_data[cve]["abbrev-status"], entry["abbrev-status"])
+    )
+    if cve_data[cve]["abbrev-status"] == "Unknown":
+        cve_data[cve] = entry
+        return
+    if cve_data[cve]["abbrev-status"] == entry["abbrev-status"]:
+        return
+    # Update like in {'abbrev-status': 'Patched', 'status': 'version-not-in-range'} to {'abbrev-status': 'Unpatched', 'status': 'version-in-range'}
+    if (
+        entry["abbrev-status"] == "Unpatched"
+        and cve_data[cve]["abbrev-status"] == "Patched"
+    ):
+        if (
+            entry["status"] == "version-in-range"
+            and cve_data[cve]["status"] == "version-not-in-range"
+        ):
+            # New result from the scan, vulnerable
+            cve_data[cve] = entry
+            d.logger.info(
+                "CVE entry %s update from Patched to Unpatched from the scan result"
+                % cve
+            )
+            return
+    # Update like in {'abbrev-status': 'Unpatched', 'status': 'version-in-range'} to  {'abbrev-status': 'Patched', 'status': 'version-not-in-range'}
+    if (
+        entry['abbrev-status'] == "Patched"
+        and cve_data[cve]['abbrev-status'] == "Unpatched"
+    ):
+        if (
+            entry['status'] == "version-not-in-range"
+            and cve_data[cve]['status'] == "version-in-range"
+        ):
+            # Range does not match the scan, but we already have a vulnerable match, ignore
+            d.logger.debug(
+                "CVE entry %s update from Patched to Unpatched from the scan result - not applying"
+                % cve
+            )
+            return
+
+    if cve_data[cve]["abbrev-status"] == "Ignored":
+        d.logger.info("CVE %s not updating because Ignored" % cve)
+        return
+    d.logger.warn(
+        "Unsupported CVE entry update for %s from %s to %s" % (cve, cve_data[cve], entry)
+    )
+
+
+def parse_cve_id(cve):
+    pattern = pattern = r"CVE-(\d{4})-(\d+)\.json"
+    match = re.match(pattern, cve)
+    if match:
+        year = match.group(1)
+        number = match.group(2)
+        return year, number
+    else:
+        return None, None
+
+
+def is_semver(version):
+    if version == "unspecified":
+        return True
+    if version == "0":
+        return True
+
+    version_parts = version.split(".")
+    if len(version_parts) == 3:
+        return True
+    if len(version_parts) == 2:
+        return True
+    return False
+
+
+def match_semver(version, target_version):
+    # Special case, 0 means "first available"
+    if version == "0":
+        return True
+
+    version_parts = version.split(".")
+    target_parts = target_version.split(".")
+
+    # Compare major and minor versions
+    if version_parts[0] == target_parts[0] and version_parts[1] == target_parts[1]:
+        return True
+    else:
+        return False
+
+
+def match_semver_less_equal(version, target_version):
+    version_pattern = r"^\d+(\.\d+)*$"
+
+    if not (re.match(version_pattern, version)):
+        return False
+    if not (re.match(version_pattern, target_version)):
+        return False
+
+    version_parts = version.split(".")
+    target_parts = target_version.split(".")
+
+    # Compare major and minor versions
+    if int(version_parts[0]) >= int(target_parts[0]):
+        return True
+
+    if int(version_parts[1]) >= int(target_parts[1]):
+        return True
+
+    # If we do not have last digit, assume 0
+    if len(version_parts) == 2:
+        version_parts.append(0)
+    if len(target_parts) == 2:
+        target_parts.append(0)
+
+    if int(version_parts[2]) >= int(target_parts[2]):
+        return True
+
+    return False
+
+
+def match_semver_less(version, target_version):
+    version_pattern = r"^\d+(\.\d+)*$"
+
+    if not (re.match(version_pattern, version)):
+        return False
+    if not (re.match(version_pattern, target_version)):
+        return False
+
+    version_parts = version.split(".")
+    target_parts = target_version.split(".")
+
+    # Compare major and minor versions
+    if int(version_parts[0]) > int(target_parts[0]):
+        return True
+
+    if int(version_parts[1]) > int(target_parts[1]):
+        return True
+
+    # If we do not have last digit, assume 0
+    if len(version_parts) == 2:
+        version_parts.append(0)
+    if len(target_parts) == 2:
+        target_parts.append(0)
+
+    if int(version_parts[2]) > int(target_parts[2]):
+        return True
+
+    return False
+
+
+def parse_cpe_entry(cpe_entry):
+    parts = cpe_entry.split(":")
+    vendor_name = parts[3]
+    product_name = parts[4]
+    version = parts[5]
+
+    if vendor_name == "*":
+        vendor_name = None
+    return vendor_name, product_name, version
+
+
+class Database:
+    @abstractmethod
+    def connexion():
+        pass
+
+    @abstractmethod
+    def close():
+        pass
+
+    @abstractmethod
+    def update_status(self, d, product, pv, pn, vendor, cve_data, cves_status):
+        pass
+
+
+class NVDDatabase(Database):
+    def __init__(self, path):
+        self.path = path
+
+    def connexion(self):
+        if os.path.exists(self.path):
+            db_file = "file:" + self.path + "?mode=ro"
+            self.conn = sqlite3.connect(db_file, uri=True)
+            return self.conn
+        else:
+            return None
+
+    def update_status(self, d, product, pv, pn, vendor, cve_data, cves_status):
+        # Find all relevant CVE IDs.
+        has_cves_in_product = False
+        real_pv = d.getVar("PV")
+        suffix = d.getVar("CVE_VERSION_SUFFIX")
+
+        cve_cursor = self.conn.execute(
+            "SELECT DISTINCT ID FROM PRODUCTS WHERE PRODUCT IS ? AND VENDOR LIKE ?",
+            (product, vendor),
+        )
+        for cverow in cve_cursor:
+            cve = cverow[0]
+
+            if cve_is_ignored(d, cve_data, cve):
+                d.logger.debug("%s-%s ignores %s" % (product, pv, cve))
+                continue
+            elif cve_is_patched(d, cve_data, cve):
+                d.logger.debug("%s has been patched" % (cve))
+                continue
+            # Write status once only for each product
+            if has_cves_in_product:
+                cves_status.append([product, True])
+
+            vulnerable = False
+            ignored = False
+
+            product_cursor = self.conn.execute(
+                "SELECT * FROM PRODUCTS WHERE ID IS ? AND PRODUCT IS ? AND VENDOR LIKE ?",
+                (cve, product, vendor),
+            )
+            for row in product_cursor:
+                (_, _, _, version_start, operator_start, version_end, operator_end) = (
+                    row
+                )
+                if cve_is_ignored(d, cve_data, cve):
+                    ignored = True
+
+                version_start = convert_cve_version(version_start)
+                version_end = convert_cve_version(version_end)
+
+                if (
+                    operator_start == "=" and pv == version_start
+                ) or version_start == "-":
+                    vulnerable = True
+                else:
+                    if operator_start:
+                        try:
+                            vulnerable_start = operator_start == ">=" and Version(
+                                pv, suffix
+                            ) >= Version(version_start, suffix)
+                            vulnerable_start |= operator_start == ">" and Version(
+                                pv, suffix
+                            ) > Version(version_start, suffix)
+                        except:
+                            d.logger.warn(
+                                "%s: Failed to compare %s %s %s for %s"
+                                % (product, pv, operator_start, version_start, cve)
+                            )
+                            vulnerable_start = False
+                    else:
+                        vulnerable_start = False
+
+                    if operator_end:
+                        try:
+                            vulnerable_end = operator_end == "<=" and Version(
+                                pv, suffix
+                            ) <= Version(version_end, suffix)
+                            vulnerable_end |= operator_end == "<" and Version(
+                                pv, suffix
+                            ) < Version(version_end, suffix)
+                        except:
+                            d.logger.warn(
+                                "%s: Failed to compare %s %s %s for %s"
+                                % (product, pv, operator_end, version_end, cve)
+                            )
+                            vulnerable_end = False
+                    else:
+                        vulnerable_end = False
+
+                    if operator_start and operator_end:
+                        vulnerable = vulnerable_start and vulnerable_end
+                    else:
+                        vulnerable = vulnerable_start or vulnerable_end
+
+                if vulnerable:
+                    if ignored:
+                        d.logger.debug("%s is ignored in %s-%s" % (cve, pn, real_pv))
+                        cve_update(d, cve_data, cve, {"abbrev-status": "Ignored"})
+                    else:
+                        d.logger.debug("%s-%s is vulnerable to %s" % (pn, real_pv, cve))
+                        cve_update(
+                            d,
+                            cve_data,
+                            cve,
+                            {
+                                "abbrev-status": "Unpatched",
+                                "status": "version-in-range",
+                            },
+                        )
+                    break
+            product_cursor.close()
+
+            if not vulnerable:
+                d.logger.debug("%s-%s is not vulnerable to %s" % (pn, real_pv, cve))
+                cve_update(
+                    d,
+                    cve_data,
+                    cve,
+                    {"abbrev-status": "Patched", "status": "version-not-in-range"},
+                )
+        cve_cursor.close()
+
+    def get_cve_info(self, cve_data):
+        for cve in cve_data:
+            cursor = self.conn.execute("SELECT * FROM NVD WHERE ID IS ?", (cve,))
+            for row in cursor:
+                # The CVE itself has been added already
+                if row[0] not in cve_data:
+                    d.logger.info("CVE record %s not present" % row[0])
+                    continue
+
+                cve_data[row[0]]["NVD-summary"] = row[1]
+                cve_data[row[0]]["NVD-scorev2"] = row[2]
+                cve_data[row[0]]["NVD-scorev3"] = row[3]
+                cve_data[row[0]]["NVD-modified"] = row[4]
+                cve_data[row[0]]["NVD-vector"] = row[5]
+                cve_data[row[0]]["NVD-vectorString"] = row[6]
+            cursor.close()
+
+    def close(self):
+        self.conn.close()
+
+
+class CVEDatabase(Database):
+    def __init__(self, path):
+        self.path = path
+        self.cves = {}
+        products = []
+        for root, dirnames, filenames in os.walk(self.path):
+            for filename in filenames:
+                year, number = parse_cve_id(filename)
+                if filename.endswith(".json") and year is not None:
+                    with open(os.path.join(root, filename)) as f:
+                        cve_id = "CVE-" + year + "-" + number
+                        data = json.load(f)
+                        try:
+                            if "containers" in data:
+                                if "cna" in data["containers"]:
+                                    if "affected" in data["containers"]["cna"]:
+                                        for x in data["containers"]["cna"]["affected"]:
+                                            products.append(
+                                                (x["product"], x, data, cve_id)
+                                            )
+                            self.cves[cve_id] = data
+
+                        except KeyError:
+                            pass
+                        except TypeError:
+                            pass
+        self.products_sorted = sorted(products, key=lambda product: product[0])
+
+    def connexion(self):
+        return self.products_sorted
+
+    def is_affected(self, d, cve, entries, version):
+        # Remove the '+git' suffix
+        version = version.split("+git")[0]
+
+        if "versions" not in entries:
+            if "defaultStatus" in entries:
+                if entries["defaultStatus"] == "affected":
+                    return "affected"
+                elif entries["defaultStatus"] == "unaffected":
+                    return "not affected"
+            return "unknown"
+
+        for entry in entries["versions"]:
+            # Filter out "git" entries that we do not support yet (they have hashes)
+            if "versionType" in entry and entry["versionType"] == "git":
+                continue
+
+            # Entries like  'versions': [{'status': 'affected', 'version': '3.5.12'}]}
+            if (entry["status"] == "affected") and "versionType" not in entry:
+                if entry["version"] == version:
+                    return "affected"
+                # If has only one version, but doesn't match ours, try another entry
+                if is_semver(entry["version"]):
+                    continue
+                # Malformed/unsupported type of version
+                d.logger.info("Malformed entry... skipping " + str(entry))
+                return "unknown"
+
+            # Malformed/unsupported version, skip parsing
+            if (entry["status"] == "affected") and not is_semver(entry["version"]):
+                d.logger.info("Malformed entry... skipping " + str(entry))
+                return "unknown"
+
+            if (
+                (entry["status"] == "affected")
+                and (
+                    entry["versionType"] == "semver" or entry["versionType"] == "custom"
+                )
+                and match_semver(entry["version"], version)
+            ):
+                if "lessThanOrEqual" in entry:
+                    if match_semver_less_equal(entry["lessThanOrEqual"], version):
+                        return "affected"
+                elif "lessThan" in entry:
+                    if match_semver_less(entry["lessThan"], version):
+                        return "affected"
+
+        return "not affected"
+
+    def update_status(self, d, product, version, pn, vendor, cve_data, cves_status):
+        if vendor == "%":
+            vendor = "*"
+
+        for pr in self.products_sorted:
+            if pr[0].lower() == product and (
+                (vendor == "*") or (vendor == pr[1]["vendor"].lower())
+            ):
+                cve = pr[3]
+                vuln_status = self.is_affected(d, cve, pr[1], version)
+                if vuln_status == "affected":
+                    cve_update(
+                        d,
+                        cve_data,
+                        cve,
+                        {"abbrev-status": "Unpatched", "status": "version-in-range"},
+                    )
+                    print(pr[3] + ": affected: " + product + " " + version)
+                elif vuln_status == "unknown":
+                    print(pr[3] + ": unknown status: " + product + " " + version)
+                    cve_update(d, cve_data, cve, {"abbrev-status": "Unknown"})
+                elif vuln_status == "not affected":
+                    print(pr[3] + ": not affected " + product + " " + version)
+                    cve_update(
+                        d,
+                        cve_data,
+                        cve,
+                        {"abbrev-status": "Patched", "status": "version-not-in-range"},
+                    )
+
+    def get_cve_info(self, cve_data):
+        for cve in cve_data:
+            if cve not in self.cves:
+                print("ERRROR: no entry for " + cve)
+                continue
+            entry = self.cves[cve]
+            if "containers" in entry:
+                if "cna" in entry["containers"]:
+                    # Search for 'title' as summary. If it does not exists, go to 'description'
+                    if "title" in entry["containers"]["cna"]:
+                        cve_data[cve]["CVE-summary"] = entry["containers"]["cna"][
+                            "title"
+                        ]
+                    elif "descriptions" in entry["containers"]["cna"]:
+                        for d in entry["containers"]["cna"]["descriptions"]:
+                            if d["lang"] == "en":
+                                cve_data[cve]["CVE-summary"] = d["value"]
+                    # Only CVSS 3.1 in practice for now
+                    if "metrics" in entry["containers"]["cna"]:
+                        for m in entry["containers"]["cna"]["metrics"]:
+                            if "cvssV3_1" in m:
+                                cve_data[cve]["CVE-scorev31"] = m["cvssV3_1"][
+                                    "baseScore"
+                                ]
+                                cve_data[cve]["CVE-vectorString"] = m["cvssV3_1"][
+                                    "vectorString"
+                                ]
+            if "cveMetadata" in cve:
+                cve_data[cve]["CVE-modified"] = cve["cveMetadata"]["dateUpdated"]
+        return cve_data
+
+    def close(self):
+        pass
