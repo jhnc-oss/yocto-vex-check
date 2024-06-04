@@ -158,7 +158,7 @@ def get_cve(args=None):
 
     try:
         if args.product != None and args.version != None:
-            do_cve_check_product(d, args.product, args.version)
+            do_cve_check_product(d, None, args.product, args.version)
         else:
             cve_check_from_file(d)
     except Exception as e:
