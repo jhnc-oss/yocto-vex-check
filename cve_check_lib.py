@@ -10,6 +10,7 @@ import itertools
 import functools
 import json
 from cve_check_map import CVE_CHECK_STATUSMAP as cve_map
+from functools import reduce
 
 _Version = collections.namedtuple("_Version", ["release", "patch_l", "pre_l", "pre_v"])
 
@@ -263,15 +264,22 @@ def get_package_info(infos, spdx_data):
         if cpes is not None:
             for cpe in cpes:
                 package = {}
-                if cpe.split(":")[4] not in product_names:
+                full_pn = ""
+                pn = ""
+                # If no vendor is specified (4th in CPE), use only product name (5th in CPE)
+                if cpe.split(":")[3] == "*":
+                    full_pn = cpe.split(":")[4]
+                    pn = full_pn
+                else:
+                    full_pn = ":".join(cpe.split(":")[3:5])
+                    pn = cpe.split(":")[4]
+                if full_pn not in product_names:
                     package["name"] = infos["pkg_name"]
-                    package["product"] = cpe.split(":")[4]
+                    package["product"] = full_pn
                     package["version"] = infos["pkg_version"]
-                    package["cpe"] = [
-                        c for c in cpes if c.split(":")[4] == package["product"]
-                    ]
+                    package["cpe"] = [c for c in cpes if pn in c]
                     info.append(package)
-                    product_names.append(package["product"])
+                    product_names.append(full_pn)
         else:
             package = {}
             package["name"] = infos["pkg_name"]
@@ -284,18 +292,23 @@ def get_package_info(infos, spdx_data):
         for el in infos["pkgs_recipe"]:
             if el["cpe"] != []:
                 for cpe in el["cpe"]:
-                    if cpe.split(":")[4] not in product_names:
+                    full_pn = ""
+                    pn = ""
+                    # If no vendor is specified (4th in CPE), use only product name (5th in CPE)
+                    if cpe.split(":")[3] == "*":
+                        full_pn = cpe.split(":")[4]
+                        pn = full_pn
+                    else:
+                        full_pn = ":".join(cpe.split(":")[3:5])
+                        pn = cpe.split(":")[4]
+                    if full_pn not in product_names:
                         package = {}
                         package["name"] = el["name"]
-                        package["product"] = cpe.split(":")[4]
+                        package["product"] = full_pn
                         package["version"] = el["version"]
-                        package["cpe"] = [
-                            c
-                            for c in el["cpe"]
-                            if c.split(":")[4] == package["product"]
-                        ]
+                        package["cpe"] = [c for c in el["cpe"] if pn in c]
                         info.append(package)
-                        product_names.append(package["name"])
+                        product_names.append(full_pn)
             else:
                 package = {}
                 package["name"] = el["name"]
@@ -303,5 +316,25 @@ def get_package_info(infos, spdx_data):
                 package["version"] = el["version"]
                 package["cpe"] = None
                 info.append(package)
+
+    # Multiple product names case (eg. curl / libcurl),
+    # for the same package name and version
+    if (
+        len(info) > 1
+        and len(list(set([el["name"] for el in info]))) == 1
+        and len(list(set([el["version"] for el in info]))) == 1
+    ):
+
+        tmp = [
+            {
+                "name": info[0]["name"],
+                "product": " ".join(list(set([el["product"] for el in info]))),
+                "version": info[0]["version"],
+                "cpe": list(
+                    set(reduce(lambda a, b: a + b, [el["cpe"] for el in info]))
+                ),
+            }
+        ]
+        info = tmp
 
     return info

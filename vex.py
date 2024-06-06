@@ -10,7 +10,6 @@ import json
 import os
 import configparser
 from vex_lib import get_vexs_from_cves
-from vex_lib import get_cve_data
 from vex_lib import read_vex
 
 import datetime
@@ -63,15 +62,17 @@ class Vex:
 
 
 def get_cves(d, logger):
-
+    cves = None
     cve_summary_path = d.getVar("CVE_CHECK_LOG_JSON")
     logger.info(f"Getting CVE log from: {cve_summary_path}")
 
-    if os.path.exists(cve_summary_path):
-        return get_cve_data(cve_summary_path)
-    else:
-        logger.error("CVE summary not found -- VEX generation aborted")
-        return None
+    with open(cve_summary_path) as file:
+        try:
+            cves = json.load(file)
+        except Error as e:
+            logger.error(f"{e} -- VEX generation stopped")
+
+    return cves
 
 
 def update_spdx(vexid, spdx_filepath):
@@ -136,19 +137,20 @@ def generate_vex_summary(d, logger):
     cve_data = get_cves(d, logger)
     if cve_data is None:
         logger.error("Error parsing CVE file")
-        return
+        return 1
     vexs = get_vexs_from_cves(timestamp, cve_data)
 
     if vexs:
-        logger.debug("Generating JSON VEX summary")
+        logger.info("Generating JSON VEX summary")
 
         with open(f"{vexpath}", "w") as f:
             json.dump(vexs, f, indent=2)
-        logger.debug(f"Complete JSON VEX summary created at: {vexpath}")
+        logger.info(f"Complete JSON VEX summary created at: {vexpath}")
 
         for k, v in vexs.items():
             with open(f"{vexdir}/vex_{k}.json", "w") as f:
                 json.dump(v, f, indent=2)
+    return 0
 
 
 def update_spdx_from_file(d, logger):

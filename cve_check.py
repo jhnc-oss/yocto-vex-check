@@ -167,11 +167,30 @@ class CheckerConfig:
         elif variable == "CVE_CHECK_LAYER_EXCLUDELIST":
             return self.CVE_CHECK_LAYER_EXCLUDELIST
         elif variable == "CVE_CHECK_LOG_JSON":
+            product = self.CVE_PRODUCT
+
+            # CVE_PRODUCT may contain multiple product names separated by spaces.
+            # It can also contain part of CPE, such as the vendor:product pair.
+            # CVE_CHECK_LOG_JSON then returns cve log filename containing only product names.
+            if len(self.CVE_PRODUCT.split()) > 1:
+                product = "-".join(
+                    list(
+                        set(
+                            [
+                                p.split(":")[1]
+                                for p in self.CVE_PRODUCT.split()
+                                if ":" in p
+                            ]
+                            + [p for p in self.CVE_PRODUCT.split() if ":" not in p]
+                        )
+                    )
+                )
+
             return os.path.join(
                 os.getcwd(),
                 self.BASE_PATH,
                 self.CVE_CHECK_LOG_JSON_DIR,
-                "log-" + self.CVE_PRODUCT + "-" + self.CVE_VERSION + ".cve.json",
+                "log-" + product + "-" + self.CVE_VERSION + ".cve.json",
             )
         elif variable == "CVE_CHECK_RECIPE_FILE_JSON":
             return os.path.join(

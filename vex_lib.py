@@ -8,16 +8,6 @@ import json
 from cve_vex_map import VEX_STATUS
 
 
-def get_cve_data(cve_summary):
-    try:
-        with open(cve_summary) as file:
-            data = json.load(file)
-            return data
-    except IndexError:
-        return None
-    return None
-
-
 def vex_format():
     vex = {
         "@id": "",
@@ -39,23 +29,27 @@ def vex_format():
 
 def get_vexs(date, cves):
     vexs = []
-    product = {}
+    products = []
 
-    if "name" in cves.keys():
-        product["@id"] = f"pkg:{cves['name']}"
     if "products" in cves.keys() and len(cves["products"]) > 0:
-        product["products"] = cves["products"][0]["product"]
-    if "version" in cves.keys():
-        product["version"] = cves["version"]
-    if "layer" in cves.keys():
-        product["layer"] = cves["layer"]
+        for p in cves["products"]:
+            product = {}
+            if "name" in cves.keys():
+                product["@id"] = f"pkg:{cves['name']}"
+            product["products"] = p["product"]
+            if "version" in cves.keys():
+                product["version"] = cves["version"]
+            if "layer" in cves.keys():
+                product["layer"] = cves["layer"]
+
+            products.append(product)
 
     if len(cves["issue"]) > 0:
         for issue in cves["issue"]:
             vex = vex_format()
             vex["@id"] = f'https://openembedded/vex/{issue["id"]}'
             vex["timestamp"] = date
-            vex["statements"][0]["products"].append(product)
+            vex["statements"][0]["products"] = products
             vex["statements"][0]["vulnerability"]["name"] = issue["id"]
 
             vex["statements"][0]["status"] = VEX_STATUS[issue["detail"]]
@@ -101,9 +95,16 @@ def sort_vexs(vexs):
                         not in sorted_vexs[cve_id]["statements"][index].keys()
                     )
                 ):
-                    sorted_vexs[cve_id]["statements"][index]["products"].append(
-                        el["statements"][0]["products"][0]
+                    sorted_vexs[cve_id]["statements"][index]["products"] = list(
+                        {
+                            x["products"]: x
+                            for x in sorted_vexs[cve_id]["statements"][index][
+                                "products"
+                            ]
+                            + el["statements"][0]["products"]
+                        }.values()
                     )
+
                 else:
                     sorted_vexs[cve_id]["statements"].append(el["statements"][0])
             else:
