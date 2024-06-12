@@ -17,20 +17,21 @@ from cve_check_lib import (
 )
 
 
-def cve_is_ignored(d, cve_data, cve):
+def cve_is_status(d, cve_data, cve, status):
     if cve not in cve_data:
         return False
-    if cve_data[cve]["abbrev-status"] == "Ignored":
+    if "abbrev-status" not in cve_data[cve]:
+        return False
+    if cve_data[cve]["abbrev-status"] == status:
         return True
     return False
+
+def cve_is_ignored(d, cve_data, cve):
+    return cve_is_status(d, cve_data, cve, "Ignored")
 
 
 def cve_is_patched(d, cve_data, cve):
-    if cve not in cve_data:
-        return False
-    if cve_data[cve]["abbrev-status"] == "Patched":
-        return True
-    return False
+    return cve_is_status(d, cve_data, cve, "Patched")
 
 
 def cve_update(d, cve_data, cve, entry):
