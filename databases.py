@@ -67,12 +67,12 @@ def cve_update(d, cve_data, cve, entry):
             return
     # Update like in {'abbrev-status': 'Unpatched', 'status': 'version-in-range'} to  {'abbrev-status': 'Patched', 'status': 'version-not-in-range'}
     if (
-        entry['abbrev-status'] == "Patched"
-        and cve_data[cve]['abbrev-status'] == "Unpatched"
+        entry["abbrev-status"] == "Patched"
+        and cve_data[cve]["abbrev-status"] == "Unpatched"
     ):
         if (
-            entry['status'] == "version-not-in-range"
-            and cve_data[cve]['status'] == "version-in-range"
+            entry["status"] == "version-not-in-range"
+            and cve_data[cve]["status"] == "version-in-range"
         ):
             # Range does not match the scan, but we already have a vulnerable match, ignore
             d.logger.debug(
@@ -85,7 +85,8 @@ def cve_update(d, cve_data, cve, entry):
         d.logger.info("CVE %s not updating because Ignored" % cve)
         return
     d.logger.warn(
-        "Unsupported CVE entry update for %s from %s to %s" % (cve, cve_data[cve], entry)
+        "Unsupported CVE entry update for %s from %s to %s"
+        % (cve, cve_data[cve], entry)
     )
 
 
@@ -112,6 +113,34 @@ def is_semver(version):
     return False
 
 
+def is_supported_custom(version):
+    semver_pattern = r"^\d+(\.\d+)*$"
+    openssl_pattern = r"^\d+(\.\d+)*[a-z]*(-dev)?$"
+
+    if re.match(semver_pattern, version):
+        return True
+    if re.match(openssl_pattern, version):
+        return True
+
+    return False
+
+
+def match_custom(version, target_version):
+    semver_pattern = r"^\d+(\.\d+)*$"
+    openssl_pattern = r"^\d+(\.\d+)*[a-z]*(-dev)?$"
+
+    if re.match(semver_pattern, version) and re.match(semver_pattern, target_version):
+        return match_semver(version, target_version)
+    elif re.match(openssl_pattern, version) and re.match(
+        openssl_pattern, target_version
+    ):
+        v = compute_openssl_version(version)
+        t = compute_openssl_version(target_version)
+        return v == t
+
+    return False
+
+
 def match_semver(version, target_version):
     # Special case, 0 means "first available"
     if version == "0":
@@ -125,6 +154,90 @@ def match_semver(version, target_version):
         return True
     else:
         return False
+
+
+def compute_openssl_version(version):
+    if version == "*":
+        return tuple([tuple([0, 0, 0]), tuple([0]), 0])
+
+    version_parts = version.split(".")
+    digits = []
+    letters = []
+    dev_version = 1
+
+    # Compute Major and minors
+    for i in range(0, len(version_parts) - 1):
+        digits.append(int(version_parts[i]))
+
+    # Filter letters and "-dev" from last digit
+    subparts = list(filter(len, re.split("(\d+)", version_parts[-1])))
+    digits.append(int(subparts[0]))
+    if len(subparts) > 1:
+        if "-dev" in subparts[1]:
+            dev_version = 0
+            subparts[1] = subparts[1][:-4]
+        for char in subparts[1]:
+            letters.append(ord(char))
+
+    while len(digits) <= 2:
+        digits.append(0)
+
+    return tuple([tuple(digits), tuple(letters), dev_version])
+
+
+def match_custom_less_equal(version, target_version):
+    semver_pattern = r"^\d+(\.\d+)*$"
+    openssl_pattern = r"^\d+(\.\d+)*[a-z]*(-dev)?$"
+
+    if (re.match(semver_pattern, version)) and (
+        re.match(semver_pattern, target_version)
+    ):
+        return match_semver_less_equal(version, target_version)
+    elif re.match(openssl_pattern, version) and re.match(
+        openssl_pattern, target_version
+    ):
+        if match_custom(version, target_version):
+            return True
+        else:
+            return match_custom_less(version, target_version)
+
+    return False
+
+
+def match_custom_less(version, target_version):
+    semver_pattern = r"^\d+(\.\d+)*$"
+    openssl_pattern = r"^\d+(\.\d+)*[a-z]*(-dev)?$"
+
+    if (re.match(semver_pattern, version)) and (
+        re.match(semver_pattern, target_version)
+    ):
+        return match_semver_less(version, target_version)
+    elif re.match(openssl_pattern, version) and re.match(
+        openssl_pattern, target_version
+    ):
+        v = compute_openssl_version(version)
+        t = compute_openssl_version(target_version)
+        return t < v
+
+    return False
+
+
+def match_custom_greater(version, target_version):
+    semver_pattern = r"^\d+(\.\d+)*$"
+    openssl_pattern = r"^\d+(\.\d+)*[a-z]*(-dev)?$"
+
+    if (re.match(semver_pattern, version)) and (
+        re.match(semver_pattern, target_version)
+    ):
+        return match_semver_greater(version, target_version)
+    elif (re.match(openssl_pattern, version)) and (
+        re.match(openssl_pattern, target_version)
+    ):
+        v = compute_openssl_version(version)
+        t = compute_openssl_version(target_version)
+        return t > v
+
+    return False
 
 
 def match_semver_less_equal(version, target_version):
@@ -182,6 +295,36 @@ def match_semver_less(version, target_version):
         target_parts.append(0)
 
     if int(version_parts[2]) > int(target_parts[2]):
+        return True
+
+    return False
+
+
+def match_semver_greater(version, target_version):
+    version_pattern = r"^\d+(\.\d+)*$"
+
+    if not (re.match(version_pattern, version)):
+        return False
+    if not (re.match(version_pattern, target_version)):
+        return False
+
+    version_parts = version.split(".")
+    target_parts = target_version.split(".")
+
+    # Compare major and minor versions
+    if int(version_parts[0]) < int(target_parts[0]):
+        return True
+
+    if int(version_parts[1]) < int(target_parts[1]):
+        return True
+
+    # If we do not have last digit, assume 0
+    if len(version_parts) == 2:
+        version_parts.append(0)
+    if len(target_parts) == 2:
+        target_parts.append(0)
+
+    if int(version_parts[2]) < int(target_parts[2]):
         return True
 
     return False
@@ -392,6 +535,10 @@ class CVEDatabase(Database):
         # Remove the '+git' suffix
         version = version.split("+git")[0]
 
+        # Filter out unsupported version
+        if not is_supported_custom(version):
+            return "unknown"
+
         if "versions" not in entries:
             if "defaultStatus" in entries:
                 if entries["defaultStatus"] == "affected":
@@ -404,6 +551,18 @@ class CVEDatabase(Database):
             # Filter out "git" entries that we do not support yet (they have hashes)
             if "versionType" in entry and entry["versionType"] == "git":
                 continue
+
+            # Check if custom version is currently supported
+            if "versionType" in entry and entry["versionType"] == "custom":
+                if not is_supported_custom(entry["version"]):
+                    continue
+                if (
+                    "lessThan" in entry and not is_supported_custom(entry["lessThan"])
+                ) or (
+                    "lessThanOrEqual" in entry
+                    and not is_supported_custom(entry["lessThanOrEqual"])
+                ):
+                    continue
 
             # Entries like  'versions': [{'status': 'affected', 'version': '3.5.12'}]}
             if (entry["status"] == "affected") and "versionType" not in entry:
@@ -421,18 +580,31 @@ class CVEDatabase(Database):
                 d.logger.info("Malformed entry... skipping " + str(entry))
                 return "unknown"
 
-            if (
-                (entry["status"] == "affected")
-                and (
-                    entry["versionType"] == "semver" or entry["versionType"] == "custom"
-                )
-                and match_semver(entry["version"], version)
-            ):
-                if "lessThanOrEqual" in entry:
-                    if match_semver_less_equal(entry["lessThanOrEqual"], version):
+            if entry["status"] == "affected" and entry["versionType"] == "semver":
+                if match_semver(entry["version"], version):
+                    return "affected"
+                elif "lessThanOrEqual" in entry:
+                    if match_semver_less_equal(
+                        entry["lessThanOrEqual"], version
+                    ) and match_semver_greater(entry["version"], version):
                         return "affected"
                 elif "lessThan" in entry:
-                    if match_semver_less(entry["lessThan"], version):
+                    if match_semver_less(
+                        entry["lessThan"], version
+                    ) and match_semver_greater(entry["version"], version):
+                        return "affected"
+            elif entry["status"] == "affected" and entry["versionType"] == "custom":
+                if match_custom(entry["version"], version):
+                    return "affected"
+                elif "lessThanOrEqual" in entry:
+                    if match_custom_less_equal(
+                        entry["lessThanOrEqual"], version
+                    ) and match_custom_greater(entry["version"], version):
+                        return "affected"
+                elif "lessThan" in entry:
+                    if match_custom_less(
+                        entry["lessThan"], version
+                    ) and match_custom_greater(entry["version"], version):
                         return "affected"
 
         return "not affected"
