@@ -24,7 +24,7 @@ class Vex:
 
     BUILD_DIR = "build/tmp-glibc"
     DEPLOY_DIR = "deploy/spdx"
-    SSTATE_ARCH = "core2-64"
+    SSTATE_ARCH = "qemux86_64"
     SPDX_PKG_INFO = "_pkg_info.json"
 
     def getVar(self, variable):
@@ -43,11 +43,17 @@ class Vex:
         elif variable == "SPDX_DIR":
             return os.path.join(self.BUILD_DIR, self.DEPLOY_DIR, self.SSTATE_ARCH)
         elif variable == "SPDX_PKG_INFO":
+            arch = self.SSTATE_ARCH
+            if arch == "qemux86_64":
+                arch = "qemux86-64"
             return os.path.join(
-                os.getcwd(), self.BASE_PATH, self.SSTATE_ARCH + self.SPDX_PKG_INFO
+                os.getcwd(), self.BASE_PATH, arch + self.SPDX_PKG_INFO
             )
         elif variable == "SPDX_PKG_INFO_NAME":
-            return os.path.join(self.BASE_PATH, self.SSTATE_ARCH + self.SPDX_PKG_INFO)
+            arch = self.SSTATE_ARCH
+            if arch == "qemux86_64":
+                arch = "qemux86-64"
+            return os.path.join(self.BASE_PATH, arch + self.SPDX_PKG_INFO)
         else:
             return None
 
@@ -75,7 +81,7 @@ def get_cves(d, logger):
     return cves
 
 
-def update_spdx(vexid, spdx_filepath):
+def update_spdx(vex_id, spdx_filepath):
     with open(spdx_filepath) as rjson:
         spdx_data = json.load(rjson)
 
@@ -102,6 +108,14 @@ def update_spdx(vexid, spdx_filepath):
     with open(spdx_filepath, "w") as wjson:
         json.dump(spdx_data, wjson)
 
+def find_spdx_file(spdxdir, pkg_name):
+    for file in os.listdir(os.path.join(spdxdir, "recipes")):
+        if pkg_name in file:
+            return os.path.join(spdxdir, "packages", file)
+    for file in os.listdir(os.path.join(spdxdir, "packages")):
+        if pkg_name in file:
+            return os.path.join(spdxdir, "packages", file)
+    return None
 
 def match_vex_spdx_with_summary(d, vex_data, spdx_summary):
     vex_id = vex_data["@id"]
@@ -155,27 +169,40 @@ def generate_vex_summary(d, logger):
 
 def update_spdx_from_file(d, logger):
     vexdir = os.path.join(d.getVar("BASE_PATH"), "vex")
-    spdx_summary = {}
     spdxdir = d.getVar("SPDX_DIR")
-    spdx_summary_path = d.getVar("SPDX_PKG_INFO")
 
-    if not os.path.exists(spdx_summary_path):
-        logger.error("SPDX summary file not found")
-        return
-    else:
+    # Match package name with spdx files listed in spdx pkg info
+    if os.path.exists(d.getVar("SPDX_PKG_INFO")):
+        spdx_summary = {}
+        spdx_summary_path = d.getVar("SPDX_PKG_INFO")
+
         with open(spdx_summary_path) as file:
             spdx_summary = json.load(file)
 
-    if not os.path.exists(spdxdir):
-        logger.error(f"SPDX folder not found ({spdxdir})")
-        return
+        if not os.path.exists(spdxdir):
+            logger.error(f"SPDX folder not found ({spdxdir})")
+            return
 
-    if not os.path.exists(vexdir):
-        generate_vex_summary(d, logger, d.getVar("SPDX_PKG_INFO_NAME"))
+        for vexfile in os.listdir(vexdir):
+            vex_data = read_vex(os.path.join(vexdir, vexfile))
+            if vex_data:
+                match_vex_spdx_with_summary(d, vex_data, spdx_summary)
+            else:
+                logger.warning(f"Vex file {vexfile} empty")
 
-    for vexfile in os.listdir(vexdir):
-        vex_data = read_vex(os.path.join(vexdir, vexfile))
-        if vex_data:
-            match_vex_spdx_with_summary(d, vex_data, spdx_summary)
-        else:
-            logger.warning(f"Vex file {vexfile} empty")
+    # Use package name to find spdx files
+    else:
+        for vexfile in os.listdir(vexdir):
+            vex_data = read_vex(os.path.join(vexdir, vexfile))
+            if vex_data:
+                all_products = [p["@id"][len("pkg:"):] for s in vex_data["statements"] for p in s["products"]]
+                for p in all_products:
+                    spdx_path = find_spdx_file(spdxdir, p)
+                    if spdx_path is not None:
+                        update_spdx(vex_data["@id"], spdx_path)
+                        logger.info(f"{spdx_path} updated")
+                    else:
+                        logger.warning(f"Spdx file not found for product {p}")
+            else:
+                logger.warning(f"Vex file {vexfile} empty")
+    return 0

@@ -255,7 +255,7 @@ def get_cpes(package_name, related_recipe, spdx_data):
     return None
 
 
-def get_package_info(infos, spdx_data):
+def get_package_info_spdx(infos, spdx_data):
     info = []
     product_names = []
 
@@ -333,6 +333,72 @@ def get_package_info(infos, spdx_data):
                 "cpe": list(
                     set(reduce(lambda a, b: a + b, [el["cpe"] for el in info]))
                 ),
+            }
+        ]
+        info = tmp
+
+    return info
+
+
+def get_package_info_cve(cve_data):
+    info = []
+    product_names = []
+
+    if cve_data["cpes"]:
+        for cpe in cve_data["cpes"]:
+            package = {}
+            full_pn = ""
+            pn = ""
+            version = ""
+            # If no vendor is specified (4th in CPE), use only product name (5th in CPE)
+            if cpe.split(":")[3] == "*":
+                full_pn = cpe.split(":")[4]
+                pn = full_pn
+            else:
+                full_pn = ":".join(cpe.split(":")[3:5])
+                pn = cpe.split(":")[4]
+            # Use CPE version if exists (5th in CPE)
+            if cpe.split(":")[5] != "*":
+                version = cpe.split(":")[5]
+            else:
+                version = cve_data["version"]
+            if full_pn not in product_names:
+                package["name"] = cve_data["name"]
+                package["product"] = full_pn
+                package["version"] = version
+                package["layer"] = cve_data["layer"]
+                package["cpe"] = [c for c in cve_data["cpes"] if pn in c]
+                info.append(package)
+                product_names.append(full_pn)
+    else:
+        for p in cve_data["products"]:
+            if p["product"] not in product_names:
+                package = {}
+                package["name"] = cve_data["name"]
+                package["product"] = p["product"]
+                package["version"] = cve_data["version"]
+                package["layer"] = cve_data["layer"]
+                package["cpe"] = None
+                info.append(package)
+                product_names.append(p["product"])
+
+    # Multiple product names case (eg. curl / libcurl),
+    # for the same package name and version
+    if (
+        len(info) > 1
+        and len(list(set([el["name"] for el in info]))) == 1
+        and len(list(set([el["version"] for el in info]))) == 1
+    ):
+
+        tmp = [
+            {
+                "name": info[0]["name"],
+                "product": " ".join(list(set([el["product"] for el in info]))),
+                "version": info[0]["version"],
+                "cpe": list(
+                    set(reduce(lambda a, b: a + b, [el["cpe"] for el in info]))
+                ),
+                "layer": info[0]["layer"],
             }
         ]
         info = tmp

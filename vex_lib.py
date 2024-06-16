@@ -36,11 +36,14 @@ def get_vexs(date, cves):
             product = {}
             if "name" in cves.keys():
                 product["@id"] = f"pkg:{cves['name']}"
-            product["products"] = p["product"]
+            if "product" in p.keys():
+                product["products"] = p["product"]
             if "version" in cves.keys():
                 product["version"] = cves["version"]
             if "layer" in cves.keys():
                 product["layer"] = cves["layer"]
+            if "cpes" in cves.keys():
+                product["cpes"] = cves["cpes"]
 
             products.append(product)
 

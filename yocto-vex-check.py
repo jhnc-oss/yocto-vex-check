@@ -122,7 +122,7 @@ def get_cve(args=None):
         try:
             os.makedirs(os.path.join(os.getcwd(), args.data_path, "cve", "log"))
         except Exception as e:
-            logger.error("CVE folder creation aborted: {}".format(e))
+            logger.error("CVE folder creation failed: {}".format(e))
             db.close()
             sys.exit(1)
 
@@ -141,18 +141,33 @@ def get_cve(args=None):
             db.close()
             sys.exit(1)
 
-    if not os.path.exists(os.path.join(os.getcwd(), args.from_spdx_file)):
-        logger.error(
-            "SPDX summary not found in {}".format(
-                os.path.join(os.getcwd(), args.from_spdx_file)
-            )
-        )
-        db.close()
-        sys.exit(1)
-    else:
-        if json_verify(os.path.join(os.getcwd(), args.from_spdx_file), "spdx", logger):
+    if args.from_spdx_file is not None:
+        if os.path.exists(
+            os.path.join(os.getcwd(), args.from_spdx_file)
+        ) and json_verify(
+            os.path.join(os.getcwd(), args.from_spdx_file), "spdx", logger
+        ):
             d.setSPDXPath(os.path.join(os.getcwd(), args.from_spdx_file))
         else:
+            logger.error(
+                "SPDX summary not found in {}".format(
+                    os.path.join(os.getcwd(), args.from_spdx_file)
+                )
+            )
+            db.close()
+            sys.exit(1)
+
+    if args.from_cve_file is not None:
+        if os.path.exists(
+            os.path.join(os.getcwd(), args.from_cve_file)
+        ) and json_verify(os.path.join(os.getcwd(), args.from_cve_file), "cve", logger):
+            d.setCVEPath(os.path.join(os.getcwd(), args.from_cve_file))
+        else:
+            logger.error(
+                "CVE summary not found in {}".format(
+                    os.path.join(os.getcwd(), args.from_cve_file)
+                )
+            )
             db.close()
             sys.exit(1)
 
@@ -216,7 +231,9 @@ def get_vex(args=None):
                 "Inform absolute path to cve summary file or"
                 " inform relative path from data folder"
             )
-            sys.exit(1)
+            return 1
+
+    generate_vex_summary(d, logger)
 
     if args.update_spdx:
         if os.path.exists(args.build_path) and os.path.exists(
@@ -224,19 +241,13 @@ def get_vex(args=None):
         ):
             d.setBuildPath(args.build_path)
             d.setArch(args.arch)
-            if os.path.exists(d.getVar("SPDX_PKG_INFO")):
-                update_spdx_from_file(d, logger)
-                return 0
-            else:
-                logger.error(
-                    f'SPDX summary for given architecture not found in {d.getVar("BASE_PATH")}'
-                )
-                sys.exit(1)
-        else:
-            logger.error(f"Build path or architecture provided not found")
-            sys.exit(1)
 
-    generate_vex_summary(d, logger)
+            update_spdx_from_file(d, logger)
+        else:
+            logger.error(
+                "Deploy path for chosen architecture type not found "
+                f'({os.path.join(args.build_path, "deploy", "spdx", args.arch)})'
+            )
 
     return 0
 
@@ -275,16 +286,25 @@ def create_parser():
 
     cveparser = subparser.add_parser(
         "cve",
-        help="Extract CVEs and store into JSON file"
-        "\nUsing either SPDX summary or VEX summary"
-        " default path is data/cve.json",
+        help="Extract CVEs and store into JSON file."
+        "\nUsing either SPDX summary or CVE summary and VEX summary"
+        " default path is data/cve-summary.json",
     )
     cveparser.add_argument(
         "-fs",
         "--from-spdx-file",
         default=None,
-        help="Export CVE with spdx summary input",
-        required=True,
+        help="Export CVE with spdx summary input.\n"
+        "Required if cve-summary.json is not used as input.",
+        required="--from-cve-file" not in sys.argv and "-fc" not in sys.argv,
+    )
+    cveparser.add_argument(
+        "-fc",
+        "--from-cve-file",
+        default=None,
+        help="Export CVE with cve summary input.\n"
+        "Required if spdx-sum.json is not used as input.",
+        required="--from-spdx-file" not in sys.argv and "-fs" not in sys.argv,
     )
     cveparser.add_argument(
         "-fv",
@@ -349,9 +369,9 @@ def create_parser():
     vexparser.add_argument(
         "-a",
         "--arch",
-        default="allarch",
+        default="qemux86_64",
         required="--update-spdx" in sys.argv or "-u" in sys.argv,
-        help="Sstate architecture (default: allarch)",
+        help="Sstate architecture (default: qemux86_64)",
     )
     vexparser.set_defaults(func=get_vex)
 

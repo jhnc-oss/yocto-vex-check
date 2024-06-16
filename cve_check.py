@@ -40,7 +40,10 @@ from cve_check_lib import (
     decode_cve_status,
     get_related_vexs,
 )
-from cve_check_lib import get_package_info
+from cve_check_lib import (
+    get_package_info_spdx,
+    get_package_info_cve,
+)
 from databases import NVDDatabase, CVEDatabase
 from cve_check_map import CVE_CHECK_STATUSMAP as cve_map
 import datetime
@@ -142,6 +145,8 @@ class CheckerConfig:
     CVE_STATUS = {}
     CVE_CHECK_STATUSMAP = cve_map
     VEX_table = None
+    SPDX_SUMMARY_PATH = None
+    FORMER_CVE_SUMMARY_PATH = None
 
     def getVar(self, variable):
         if variable == "CVE_CHECK_IGNORE":
@@ -309,6 +314,12 @@ class CheckerConfig:
 
     def getSPDXPath(self):
         return self.SPDX_SUMMARY_PATH
+
+    def setCVEPath(self, path):
+        self.FORMER_CVE_SUMMARY_PATH = path
+
+    def getCVEPath(self):
+        return self.FORMER_CVE_SUMMARY_PATH
 
     def getDefaultDatabase(self):
         db_file = self.getVar("CVE_CHECK_DB_FILE")
@@ -730,8 +741,6 @@ def cve_write_data_json(d, cve_data, cve_status):
         p = {"product": s[0], "cvesInRecord": "Yes"}
         if s[1] == False:
             p["cvesInRecord"] = "No"
-        if d.getVar("CPE_table") is not None:
-            p["cpe"] = list(d.getVar("CPE_table"))[0]
         product_data.append(p)
 
     package_version = "%s%s" % (d.getVar("EXTENDPE"), d.getVar("PV"))
@@ -741,6 +750,8 @@ def cve_write_data_json(d, cve_data, cve_status):
         "version": package_version,
         "products": product_data,
     }
+    if d.getVar("CPE_table") is not None:
+        package_data["cpes"] = list(d.getVar("CPE_table"))[0]
 
     cve_list = []
 
@@ -768,8 +779,8 @@ def cve_write_data_json(d, cve_data, cve_status):
             cve_item["vectorString"] = cve_data[cve]["CVE-vectorString"]
         if "status" in cve_data[cve]:
             cve_item["detail"] = cve_data[cve]["status"]
-        if "justification" in cve_data[cve]:
-            cve_item["description"] = cve_data[cve]["justification"]
+        if "description" in cve_data[cve]:
+            cve_item["description"] = cve_data[cve]["description"]
         if "resource" in cve_data[cve]:
             cve_item["patch-file"] = cve_data[cve]["resource"]
         cve_list.append(cve_item)
@@ -808,18 +819,41 @@ def do_cve_check_product(d, package, product, version):
     d.resetLayer()
 
 
-def cve_check_from_file(d):
-
+def cve_check_from_spdx(d):
     with open(d.getSPDXPath()) as f:
         data = json.load(f)
         for el in data:
             for name, details in el.items():
-                packages = get_package_info(details, data)
+                packages = get_package_info_spdx(details, data)
                 for p in packages:
                     if p["cpe"] is not None:
                         d.setCPETable(p["cpe"])
                     do_cve_check_product(d, p["name"], p["product"], p["version"])
                     d.resetCPETable()
+
+
+def cve_check_from_cve(d):
+    with open(d.getCVEPath()) as f:
+        data = json.load(f)
+        for el in data["package"]:
+            packages = get_package_info_cve(el)
+            for p in packages:
+                d.setLayer(p["layer"])
+                if p["cpe"] is not None:
+                    d.setCPETable(p["cpe"])
+                do_cve_check_product(d, p["name"], p["product"], p["version"])
+                d.resetCPETable()
+
+
+def cve_check_from_file(d):
+
+    # Using CVE summary to get package info
+    if d.getCVEPath() is not None:
+        cve_check_from_cve(d)
+
+    # Using SPDX summary to get package info
+    elif d.getSPDXPath() is not None:
+        cve_check_from_spdx(d)
 
     cve_summary_name = d.getVar("CVE_CHECK_SUMMARY_FILE_NAME_JSON")
     if not os.path.exists(cve_summary_name):
