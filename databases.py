@@ -114,7 +114,7 @@ def is_semver(version):
 
 
 def is_supported_custom(version):
-    semver_pattern = r"^\d+(\.\d+)*$"
+    semver_pattern = r"^\d+(\.\d+){0,2}$"
     openssl_pattern = r"^\d+(\.\d+)*[a-z]*(-dev)?$"
 
     if re.match(semver_pattern, version):
@@ -126,7 +126,7 @@ def is_supported_custom(version):
 
 
 def match_custom(version, target_version):
-    semver_pattern = r"^\d+(\.\d+)*$"
+    semver_pattern = r"^\d+(\.\d+){0,2}$"
     openssl_pattern = r"^\d+(\.\d+)*[a-z]*(-dev)?$"
 
     if re.match(semver_pattern, version) and re.match(semver_pattern, target_version):
@@ -186,7 +186,7 @@ def compute_openssl_version(version):
 
 
 def match_custom_less_equal(version, target_version):
-    semver_pattern = r"^\d+(\.\d+)*$"
+    semver_pattern = r"^\d+(\.\d+){0,2}$"
     openssl_pattern = r"^\d+(\.\d+)*[a-z]*(-dev)?$"
 
     if (re.match(semver_pattern, version)) and (
@@ -205,7 +205,7 @@ def match_custom_less_equal(version, target_version):
 
 
 def match_custom_less(version, target_version):
-    semver_pattern = r"^\d+(\.\d+)*$"
+    semver_pattern = r"^\d+(\.\d+){0,2}$"
     openssl_pattern = r"^\d+(\.\d+)*[a-z]*(-dev)?$"
 
     if (re.match(semver_pattern, version)) and (
@@ -223,7 +223,7 @@ def match_custom_less(version, target_version):
 
 
 def match_custom_greater(version, target_version):
-    semver_pattern = r"^\d+(\.\d+)*$"
+    semver_pattern = r"^\d+(\.\d+){0,2}$"
     openssl_pattern = r"^\d+(\.\d+)*[a-z]*(-dev)?$"
 
     if (re.match(semver_pattern, version)) and (
