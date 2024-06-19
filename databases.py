@@ -688,6 +688,21 @@ class CVEDatabase(Database):
                                 cve_data[cve]["CVE-vectorString"] = m["cvssV3_1"][
                                     "vectorString"
                                 ]
+                if "adp" in entry["containers"]:
+                    for adp in entry["containers"]["adp"]:
+                        if "metrics" in adp:
+                            for m in adp["metrics"]:
+                                for k, v in m.items():
+                                    if k == "cvssV3_1":
+                                        cve_data[cve]["CVE-scorev31"] = v["baseScore"]
+                                        cve_data[cve]["CVE-vectorString"] = v[
+                                            "vectorString"
+                                        ]
+                                    if k == "other" and v["type"] == "ssvc":
+                                        cve_data[cve]["CVE-ssvc"] = v["content"][
+                                            "options"
+                                        ]
+
             if "cveMetadata" in cve:
                 cve_data[cve]["CVE-modified"] = cve["cveMetadata"]["dateUpdated"]
         return cve_data
