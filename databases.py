@@ -101,15 +101,13 @@ def parse_cve_id(cve):
 
 
 def is_semver(version):
+    semver_pattern = r"^\d+(\.\d+){0,2}$"
+
     if version == "unspecified":
         return True
     if version == "0":
         return True
-
-    version_parts = version.split(".")
-    if len(version_parts) == 3:
-        return True
-    if len(version_parts) == 2:
+    if re.match(semver_pattern, version):
         return True
     return False
 
