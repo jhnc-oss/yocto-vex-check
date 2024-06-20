@@ -130,7 +130,7 @@ def match_semver(version, target_version):
 
 
 def match_semver_less_equal(version, target_version):
-    version_pattern = r"^\d+(\.\d+)*$"
+    version_pattern = r"^\d+(\.\d+){0,2}$"
 
     if not (re.match(version_pattern, version)):
         return False
@@ -160,7 +160,7 @@ def match_semver_less_equal(version, target_version):
 
 
 def match_semver_less(version, target_version):
-    version_pattern = r"^\d+(\.\d+)*$"
+    version_pattern = r"^\d+(\.\d+){0,2}$"
 
     if not (re.match(version_pattern, version)):
         return False
