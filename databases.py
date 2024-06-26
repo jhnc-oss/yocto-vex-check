@@ -50,6 +50,8 @@ def cve_update(d, cve_data, cve, entry):
     if cve_data[cve]["abbrev-status"] == entry["abbrev-status"]:
         return
     # Update like in {'abbrev-status': 'Patched', 'status': 'version-not-in-range'} to {'abbrev-status': 'Unpatched', 'status': 'version-in-range'}
+    # or {'abbrev-status': 'Patched', 'status': 'fix-file-included', 'resource': '...somecve.patch'} to {'abbrev-status': 'Unpatched', 'status': 'version-in-range'}
+
     if (
         entry["abbrev-status"] == "Unpatched"
         and cve_data[cve]["abbrev-status"] == "Patched"
@@ -62,6 +64,16 @@ def cve_update(d, cve_data, cve, entry):
             cve_data[cve] = entry
             d.logger.info(
                 "CVE entry %s update from Patched to Unpatched from the scan result"
+                % cve
+            )
+            return
+        elif (
+            entry["status"] == "version-in-range"
+            and cve_data[cve]["status"] == "fix-file-included"
+        ):
+            # Issue fixed by a patch, we keep the entry
+            d.logger.info(
+                "CVE entry %s vulnerable from the scan result, but have a patch"
                 % cve
             )
             return
@@ -84,6 +96,7 @@ def cve_update(d, cve_data, cve, entry):
     if cve_data[cve]["abbrev-status"] == "Ignored":
         d.logger.info("CVE %s not updating because Ignored" % cve)
         return
+
     d.logger.warn(
         "Unsupported CVE entry update for %s from %s to %s"
         % (cve, cve_data[cve], entry)
@@ -563,6 +576,10 @@ class CVEDatabase(Database):
                     and not is_supported_custom(entry["lessThanOrEqual"])
                 ):
                     continue
+
+            if "version" not in entry:
+                d.logger.info("Entry without version... skipping " + str(entry))
+                return "unknown"
 
             # Entries like  'versions': [{'status': 'affected', 'version': '3.5.12'}]}
             if (entry["status"] == "affected") and "versionType" not in entry:
