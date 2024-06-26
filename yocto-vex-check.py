@@ -31,7 +31,7 @@ def machine_interaction(build_path):
         return None
 
 
-def build_path_interaction(arch, all_machines_flag):
+def build_path_interaction(machine, all_machines_flag):
     build_path = input(
         "Inform a absolute path to a build directory\n(Example: /<root>/build/tmp-glibc) :\n"
     )
@@ -296,7 +296,7 @@ def create_parser():
         default=None,
         help="Export CVE with spdx summary input.\n"
         "Required if cve-summary.json is not used as input.",
-        required="--from-cve-file" not in sys.argv and "-fc" not in sys.argv,
+        required=bool("--from-cve-file" not in sys.argv) and bool("-fc" not in sys.argv),
     )
     cveparser.add_argument(
         "-fc",
@@ -304,7 +304,7 @@ def create_parser():
         default=None,
         help="Export CVE with cve summary input.\n"
         "Required if spdx-sum.json is not used as input.",
-        required="--from-spdx-file" not in sys.argv and "-fs" not in sys.argv,
+        required=bool("--from-spdx-file" not in sys.argv) and bool("-fs" not in sys.argv),
     )
     cveparser.add_argument(
         "-fv",
