@@ -58,6 +58,10 @@ def main(argv):
 
     try:
         use_package_list_cve = True
+        # Create the directory if it does not exist
+        if not os.path.exists(args.input_temporary_dir):
+            os.makedirs(args.input_temporary_dir)
+
         if args.build_dir:
             use_package_list_cve = False
             print("Coping SPDX files")
