@@ -291,6 +291,9 @@ class CheckerConfig:
     def setCPETable(self, *cpe):
         self.CPE_table = cpe
 
+    def getCPETable(self):
+        return self.CPE_table
+
     def resetCPETable(self):
         self.CPE_table = None
 
@@ -753,6 +756,12 @@ def cve_write_data_json(d, cve_data, cve_status):
     if d.getVar("CPE_table") is not None:
         package_data["cpes"] = list(d.getVar("CPE_table"))[0]
 
+    for _, data in cve_data.items():
+        if "cpes" in data.keys() and "cpes" in package_data.keys():
+            package_data["cpes"] = list(set(package_data["cpes"] + data["cpes"]))
+        elif "cpes" in data.keys():
+            package_data["cpes"] = data["cpes"]
+
     cve_list = []
 
     for cve in sorted(cve_data):
@@ -783,6 +792,10 @@ def cve_write_data_json(d, cve_data, cve_status):
             cve_item["description"] = cve_data[cve]["description"]
         if "resource" in cve_data[cve]:
             cve_item["patch-file"] = cve_data[cve]["resource"]
+        if "adp-title" in cve_data[cve]:
+            cve_item["adp-title"] = cve_data[cve]["adp-title"]
+        if "CVE-ssvc" in cve_data[cve]:
+            cve_item["CVE-ssvc"] = cve_data[cve]["CVE-ssvc"]
         cve_list.append(cve_item)
 
     package_data["issue"] = cve_list

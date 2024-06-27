@@ -532,6 +532,13 @@ class CVEDatabase(Database):
                         data = json.load(f)
                         try:
                             if "containers" in data:
+                                if "adp" in data["containers"]:
+                                    for adp in data["containers"]["adp"]:
+                                        if "affected" in adp:
+                                            for x in adp["affected"]:
+                                                products.append(
+                                                    (x["product"], x, data, cve_id)
+                                                )
                                 if "cna" in data["containers"]:
                                     if "affected" in data["containers"]["cna"]:
                                         for x in data["containers"]["cna"]["affected"]:
@@ -689,6 +696,7 @@ class CVEDatabase(Database):
                                     "vectorString"
                                 ]
                 if "adp" in entry["containers"]:
+                    cve_data[cve]["adp-title"] = entry["containers"]["adp"][0]["title"]
                     for adp in entry["containers"]["adp"]:
                         if "metrics" in adp:
                             for m in adp["metrics"]:
@@ -702,7 +710,10 @@ class CVEDatabase(Database):
                                         cve_data[cve]["CVE-ssvc"] = v["content"][
                                             "options"
                                         ]
-
+                        if "affected" in adp:
+                            for x in adp["affected"]:
+                                if "cpes" in x:
+                                    cve_data[cve]["cpes"] = x["cpes"]
             if "cveMetadata" in cve:
                 cve_data[cve]["CVE-modified"] = cve["cveMetadata"]["dateUpdated"]
         return cve_data
