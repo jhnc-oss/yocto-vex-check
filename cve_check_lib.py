@@ -93,7 +93,7 @@ def get_related_vexs(d, vex_path, product, version):
                 for statement in v["statements"]:
                     for p in statement["products"]:
                         if product == p["@id"][len("pkg:") :] or (
-                            "product" in p and product == p["product"]
+                            "products" in p and product == p["products"]
                         ):
                             vex[statement["vulnerability"]["name"]] = statement
                             related_vexs.append(vex)
