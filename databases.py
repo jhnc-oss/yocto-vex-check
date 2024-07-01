@@ -539,7 +539,7 @@ class CVEDatabase(Database):
                                                 products.append(
                                                     (x["product"], x, data, cve_id)
                                                 )
-                                if "cna" in data["containers"]:
+                                elif "cna" in data["containers"]:
                                     if "affected" in data["containers"]["cna"]:
                                         for x in data["containers"]["cna"]["affected"]:
                                             products.append(
@@ -644,7 +644,7 @@ class CVEDatabase(Database):
 
         for pr in self.products_sorted:
             if pr[0].lower() == product and (
-                (vendor == "*") or (vendor == pr[1]["vendor"].lower())
+                (vendor == "*") or (vendor.lower() == pr[1]["vendor"].lower())
             ):
                 cve = pr[3]
                 vuln_status = self.is_affected(d, cve, pr[1], version)
