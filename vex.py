@@ -157,13 +157,18 @@ def generate_vex_summary(d, logger):
     if vexs:
         logger.info("Generating JSON VEX summary")
 
-        with open(f"{vexpath}", "w") as f:
+        with open(vexpath, "w") as f:
             json.dump(vexs, f, indent=2)
         logger.info(f"Complete JSON VEX summary created at: {vexpath}")
 
         for k, v in vexs.items():
             with open(f"{vexdir}/vex_{k}.json", "w") as f:
                 json.dump(v, f, indent=2)
+    else:
+        with open(vexpath, "w") as f:
+            json.dump({}, f, indent=2)
+        logger.info(f"Empty VEX summary created at: {vexpath}")
+
     return 0
 
 
