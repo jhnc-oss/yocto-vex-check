@@ -51,8 +51,8 @@ class TestAdpOverride(unittest.TestCase):
         with open(f"{cna_database_path}/CVE-1234-5678.json", "w") as f:
             json.dump(mockCVE, f)
 
-        adp_addition = mockCVE
-        adp_addition["containers"]["adp"] = [
+        mockCVEadp = mockCVE
+        mockCVEadp["containers"]["adp"] = [
             {
                 "title": "CISA ADP Vulnrichment",
                 "metrics": [
@@ -93,10 +93,35 @@ class TestAdpOverride(unittest.TestCase):
                 ],
             }
         ]
+        mockCVE2 = {
+            "dataType": "CVE_RECORD",
+            "dataVersion": "5.1",
+            "containers": {
+                "cna": {
+                    "affected": [
+                        {
+                            "vendor": "vendorB",
+                            "product": "product",
+                            "versions": [
+                                {
+                                    "version": "2.0.0",
+                                    "status": "affected",
+                                    "versionType": "semver",
+                                }
+                            ],
+                        }
+                    ],
+                    "descriptions": [{"lang": "en", "value": "Mock CVE2"}],
+                },
+            },
+        }
+
         # Setup cna-adp database
         os.makedirs(adp_database_path)
         with open(f"{adp_database_path}/CVE-1234-5678.json", "w") as f:
-            json.dump(adp_addition, f)
+            json.dump(mockCVEadp, f)
+        with open(f"{adp_database_path}/CVE-1234-5679.json", "w") as f:
+            json.dump(mockCVE2, f)
 
         mock_cve_summary = {
             "version": "1",
@@ -205,15 +230,20 @@ class TestAdpOverride(unittest.TestCase):
 
         output_issues = output_summary["package"][0]["issue"]
         output_cpes = output_summary["package"][0]["cpes"]
+        output_cve5678 = [el for el in output_issues if el["id"] == "CVE-1234-5678"]
+        output_cve5679 = [el for el in output_issues if el["id"] == "CVE-1234-5679"]
 
         # Assert fixed adp version of CVE has been used compared to cna version
         self.assertNotEqual(len(output_issues), len(original_issues))
         # Assert CVE has been ruled as "Unpatched"
-        self.assertEqual(output_issues[0]["status"], "Unpatched")
+        self.assertEqual(len(output_cve5678), 1)
+        self.assertEqual(output_cve5678[0]["status"], "Unpatched")
         # Assert CPEs contained in adp container is present
         self.assertNotEqual(len(output_cpes), len(original_cpes))
         # Assert each CPE is different from one another
         self.assertEqual(len(output_cpes), len(list(set(output_cpes))))
+        # Assert CVE-1234-5679 is present
+        self.assertEqual(len(output_cve5679), 1)
 
     @classmethod
     def tearDownClass(self):
