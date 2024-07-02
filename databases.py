@@ -638,9 +638,13 @@ class CVEDatabase(Database):
 
         return "not affected"
 
-    def update_status(self, d, product, version, pn, vendor, cve_data, cves_status):
+    def update_status(self, d, product, version, pn, vendor, cve_data, cves_status, loop):
         if vendor == "%":
             vendor = "*"
+
+        # Store vendor-product pair to avoid infinite loop
+        loop.append(f"{vendor}-{product}")
+        loop = list(set(loop))
 
         for pr in self.products_sorted:
             if pr[0].lower() == product and (
@@ -667,6 +671,14 @@ class CVEDatabase(Database):
                         cve,
                         {"abbrev-status": "Patched", "status": "version-not-in-range"},
                     )
+                
+                if "cpes" in pr[1].keys():
+                    for cpe in pr[1]["cpes"]:
+                        cpe_vendor = cpe.split(":")[3]
+                        cpe_product = cpe.split(":")[4]
+                        if f"{cpe_vendor}-{cpe_product}" not in loop:
+                            if cpe_vendor.lower() != vendor.lower() or cpe_product != product:
+                                self.update_status(d, cpe_product, version, pn, cpe_vendor, cve_data, cves_status, loop)
 
     def get_cve_info(self, cve_data):
         for cve in cve_data:

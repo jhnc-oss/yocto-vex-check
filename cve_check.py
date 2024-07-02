@@ -583,7 +583,7 @@ def check_cves(d, cve_data):
             vendor = "%"
 
         cves_in_product = db.update_status(
-            d, product, pv, pn, vendor, cve_data, cves_status
+            d, product, pv, pn, vendor, cve_data, cves_status, []
         )
         if cves_in_product:
             cves_in_recipe = True
