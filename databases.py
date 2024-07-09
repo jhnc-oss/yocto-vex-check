@@ -26,6 +26,7 @@ def cve_is_status(d, cve_data, cve, status):
         return True
     return False
 
+
 def cve_is_ignored(d, cve_data, cve):
     return cve_is_status(d, cve_data, cve, "Ignored")
 
@@ -73,8 +74,7 @@ def cve_update(d, cve_data, cve, entry):
         ):
             # Issue fixed by a patch, we keep the entry
             d.logger.info(
-                "CVE entry %s vulnerable from the scan result, but have a patch"
-                % cve
+                "CVE entry %s vulnerable from the scan result, but have a patch" % cve
             )
             return
     # Update like in {'abbrev-status': 'Unpatched', 'status': 'version-in-range'} to  {'abbrev-status': 'Patched', 'status': 'version-not-in-range'}
@@ -126,6 +126,15 @@ def is_semver(version):
     return False
 
 
+# Process a parsed (split) semver. Add zeros if the version has
+# less than three digits
+def normalize_semver(version):
+    if len(version) == 1:
+        version.append(0)
+    if len(version) == 2:
+        version.append(0)
+
+
 def is_supported_custom(version):
     semver_pattern = r"^\d+(\.\d+){0,2}$"
     openssl_pattern = r"^\d+(\.\d+)*[a-z]*(-dev)?$"
@@ -162,8 +171,16 @@ def match_semver(version, target_version):
     version_parts = version.split(".")
     target_parts = target_version.split(".")
 
-    # Compare major and minor versions
-    if version_parts[0] == target_parts[0] and version_parts[1] == target_parts[1]:
+    # Add missing zeros if needed
+    normalize_semver(version_parts)
+    normalize_semver(target_parts)
+
+    # Compare all digits
+    if (
+        int(version_parts[0]) == int(target_parts[0])
+        and int(version_parts[1]) == int(target_parts[1])
+        and int(version_parts[2]) == int(target_parts[2])
+    ):
         return True
     else:
         return False
@@ -254,30 +271,11 @@ def match_custom_greater(version, target_version):
 
 
 def match_semver_less_equal(version, target_version):
-    version_pattern = r"^\d+(\.\d+){0,2}$"
 
-    if not (re.match(version_pattern, version)):
-        return False
-    if not (re.match(version_pattern, target_version)):
-        return False
-
-    version_parts = version.split(".")
-    target_parts = target_version.split(".")
-
-    # Compare major and minor versions
-    if int(version_parts[0]) >= int(target_parts[0]):
+    if match_semver_less(version, target_version) == True:
         return True
 
-    if int(version_parts[1]) >= int(target_parts[1]):
-        return True
-
-    # If we do not have last digit, assume 0
-    if len(version_parts) == 2:
-        version_parts.append(0)
-    if len(target_parts) == 2:
-        target_parts.append(0)
-
-    if int(version_parts[2]) >= int(target_parts[2]):
+    if match_semver(version, target_version) == True:
         return True
 
     return False
@@ -294,18 +292,21 @@ def match_semver_less(version, target_version):
     version_parts = version.split(".")
     target_parts = target_version.split(".")
 
-    # Compare major and minor versions
+    # Add missing zeros if needed
+    normalize_semver(version_parts)
+    normalize_semver(target_parts)
+
     if int(version_parts[0]) > int(target_parts[0]):
         return True
+
+    if int(version_parts[0]) < int(target_parts[0]):
+        return False
 
     if int(version_parts[1]) > int(target_parts[1]):
         return True
 
-    # If we do not have last digit, assume 0
-    if len(version_parts) == 2:
-        version_parts.append(0)
-    if len(target_parts) == 2:
-        target_parts.append(0)
+    if int(version_parts[1]) < int(target_parts[1]):
+        return False
 
     if int(version_parts[2]) > int(target_parts[2]):
         return True
@@ -314,7 +315,7 @@ def match_semver_less(version, target_version):
 
 
 def match_semver_greater(version, target_version):
-    version_pattern = r"^\d+(\.\d+)*$"
+    version_pattern = r"^\d+(\.\d+){0,2}$"
 
     if not (re.match(version_pattern, version)):
         return False
@@ -324,18 +325,22 @@ def match_semver_greater(version, target_version):
     version_parts = version.split(".")
     target_parts = target_version.split(".")
 
+    # Add missing zeros if needed
+    normalize_semver(version_parts)
+    normalize_semver(target_parts)
+
     # Compare major and minor versions
     if int(version_parts[0]) < int(target_parts[0]):
         return True
 
+    if int(version_parts[0]) > int(target_parts[0]):
+        return False
+
     if int(version_parts[1]) < int(target_parts[1]):
         return True
 
-    # If we do not have last digit, assume 0
-    if len(version_parts) == 2:
-        version_parts.append(0)
-    if len(target_parts) == 2:
-        target_parts.append(0)
+    if int(version_parts[1]) > int(target_parts[1]):
+        return False
 
     if int(version_parts[2]) < int(target_parts[2]):
         return True
@@ -598,9 +603,7 @@ class CVEDatabase(Database):
                 return "unknown"
 
             if entry["status"] == "affected" and entry["versionType"] == "semver":
-                if match_semver(entry["version"], version):
-                    return "affected"
-                elif "lessThanOrEqual" in entry:
+                if "lessThanOrEqual" in entry:
                     if match_semver_less_equal(
                         entry["lessThanOrEqual"], version
                     ) and match_semver_greater(entry["version"], version):
@@ -610,6 +613,8 @@ class CVEDatabase(Database):
                         entry["lessThan"], version
                     ) and match_semver_greater(entry["version"], version):
                         return "affected"
+                elif match_semver(entry["version"], version):
+                    return "affected"
             elif entry["status"] == "affected" and entry["versionType"] == "custom":
                 if match_custom(entry["version"], version):
                     return "affected"

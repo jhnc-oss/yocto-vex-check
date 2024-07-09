@@ -44,14 +44,24 @@ class SemverTest(unittest.TestCase):
     def test_is_less(self):
         for el in self.less_versions:
             self.assertEqual(match_semver_less(el[0], el[1]), True)
+        for el in self.less_versions:
+            self.assertEqual(match_semver_less(el[1], el[0]), False)
+        for el in self.equal_versions:
+            self.assertEqual(match_semver_less(el[0], el[1]), False)
 
     def test_is_greater(self):
         for el in self.greater_versions:
             self.assertEqual(match_semver_greater(el[0], el[1]), True)
+        for el in self.greater_versions:
+            self.assertEqual(match_semver_greater(el[1], el[0]), False)
+        for el in self.equal_versions:
+            self.assertEqual(match_semver_less(el[0], el[1]), False)
 
     def test_is_less_equal(self):
         for el in self.less_versions + self.equal_versions:
             self.assertEqual(match_semver_less_equal(el[0], el[1]), True)
+        for el in self.greater_versions:
+            self.assertEqual(match_semver_less_equal(el[0], el[1]), False)
 
 
 if __name__ == "__main__":
