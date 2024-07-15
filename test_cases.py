@@ -9,9 +9,7 @@ import os
 import unittest
 import json
 import shutil
-import importlib
-
-yocto_vex_check = importlib.import_module("yocto-vex-check")
+import subprocess
 
 current_path = os.path.abspath(__file__)[:-len(os.path.basename(__file__))]
 test_data_path = os.path.join(current_path, "tests")
@@ -23,18 +21,30 @@ data_path = "testdata"
 cve_generated_path = os.path.join(data_path, "cve-summary.json")
 vex_generated_path = os.path.join(data_path, "vex-summary.json")
 
+scan_tool = os.path.join(
+        current_path, "yocto-vex-check.py"
+    )
+
 class TestCase(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        self.vex_command = ["vex", "-d", data_path, "-fc", cve_summary_with_issue]
-        self.cve_command = ["cve", "-d", data_path, "-fc", cve_summary_from_vex_class, "-fv", vex_generated_path, "-db-type", "CVE", "-db", raw_db_path]
+        self.vex_command = [scan_tool, "vex", "-d", data_path, "-fc", cve_summary_with_issue]
+        self.cve_command = [scan_tool, "cve", "-d", data_path, "-fc", cve_summary_from_vex_class, "-fv", vex_generated_path, "-db-type", "CVE", "-db", raw_db_path]
 
     def test_command(self):
-        try:
-            yocto_vex_check.main(self.vex_command)
-            yocto_vex_check.main(self.cve_command)
-        except SystemExit as e:
-            assert SystemExit(0)
+        output = subprocess.run(
+            self.vex_command,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(output.returncode, 0)
+
+        output = subprocess.run(
+            self.cve_command,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(output.returncode, 0)
 
     def test_compare_cves(self):
         cve_build = {}

@@ -115,28 +115,33 @@ def parse_cve_id(cve):
 
 
 def is_semver(version):
-    semver_pattern = r"^\d+(\.\d+){0,2}$"
+    semver_pattern = r"^(\d+(\.\d+){0,2}|-|0|(\d\.){0,2}(\*))$"
 
     if version == "unspecified":
         return True
     if version == "0":
         return True
+    if version == "-":
+        return True
+    # Special case, * can be used in "lessThan" attribute to denote a range with no upper bound at all
+    if version == "*":
+        return True
+
     if re.match(semver_pattern, version):
         return True
+
     return False
 
 
 # Process a parsed (split) semver. Add zeros if the version has
 # less than three digits
 def normalize_semver(version):
-    if len(version) == 1:
-        version.append(0)
-    if len(version) == 2:
+    while len(version) < 3:
         version.append(0)
 
 
 def is_supported_custom(version):
-    semver_pattern = r"^\d+(\.\d+){0,2}$"
+    semver_pattern = r"^(\d+(\.\d+){0,2}|-|0|(\d\.){0,2}(\*))$"
     openssl_pattern = r"^\d+(\.\d+)*[a-z]*(-dev)?$"
 
     if re.match(semver_pattern, version):
@@ -148,7 +153,7 @@ def is_supported_custom(version):
 
 
 def match_custom_equal(version, target_version):
-    semver_pattern = r"^\d+(\.\d+){0,2}$"
+    semver_pattern = r"^(\d+(\.\d+){0,2}|-|0|(\d\.){0,2}(\*))$"
     openssl_pattern = r"^\d+(\.\d+)*[a-z]*(-dev)?$"
 
     if re.match(semver_pattern, version) and re.match(semver_pattern, target_version):
@@ -164,6 +169,7 @@ def match_custom_equal(version, target_version):
 
 
 def match_semver_equal(version, target_version):
+
     version_parts = version.split(".")
     target_parts = target_version.split(".")
 
@@ -171,15 +177,14 @@ def match_semver_equal(version, target_version):
     normalize_semver(version_parts)
     normalize_semver(target_parts)
 
-    # Compare all digits
-    if (
-        int(version_parts[0]) == int(target_parts[0])
-        and int(version_parts[1]) == int(target_parts[1])
-        and int(version_parts[2]) == int(target_parts[2])
-    ):
-        return True
-    else:
-        return False
+    for i in range(3):
+        # Special case - and *
+        if version_parts[i] == "*" or version_parts[i] == "-":
+            return False
+        if int(version_parts[i]) != int(target_parts[i]):
+            return False
+
+    return True
 
 
 def compute_openssl_version(version):
@@ -212,7 +217,7 @@ def compute_openssl_version(version):
 
 
 def match_custom_less_equal(version, target_version):
-    semver_pattern = r"^\d+(\.\d+){0,2}$"
+    semver_pattern = r"^(\d+(\.\d+){0,2}|-|0|(\d\.){0,2}(\*))$"
     openssl_pattern = r"^\d+(\.\d+)*[a-z]*(-dev)?$"
 
     if (re.match(semver_pattern, version)) and (
@@ -231,7 +236,7 @@ def match_custom_less_equal(version, target_version):
 
 
 def match_custom_less(version, target_version):
-    semver_pattern = r"^\d+(\.\d+){0,2}$"
+    semver_pattern = r"^(\d+(\.\d+){0,2}|-|0|(\d\.){0,2}(\*))$"
     openssl_pattern = r"^\d+(\.\d+)*[a-z]*(-dev)?$"
 
     if (re.match(semver_pattern, version)) and (
@@ -249,7 +254,7 @@ def match_custom_less(version, target_version):
 
 
 def match_custom_greater(version, target_version):
-    semver_pattern = r"^\d+(\.\d+){0,2}$"
+    semver_pattern = r"^(\d+(\.\d+){0,2}|-|0|(\d\.){0,2}(\*))$"
     openssl_pattern = r"^\d+(\.\d+)*[a-z]*(-dev)?$"
 
     if (re.match(semver_pattern, version)) and (
@@ -261,28 +266,40 @@ def match_custom_greater(version, target_version):
     ):
         v = compute_openssl_version(version)
         t = compute_openssl_version(target_version)
-        return t > v
+        return t >= v
 
     return False
 
 
 def match_semver_less_equal(version, target_version):
+    version_pattern = r"^(\d+(\.\d+){0,2}|-|0|(\d\.){0,2}(\*))$"
 
-    if match_semver_less(version, target_version) == True:
-        return True
+    if not (re.match(version_pattern, version)):
+        return False
+    if not (re.match(version_pattern, target_version)):
+        return False
 
     if match_semver_equal(version, target_version) == True:
+        return True
+    if match_semver_less(version, target_version):
         return True
 
     return False
 
 
 def match_semver_less(version, target_version):
-    version_pattern = r"^\d+(\.\d+){0,2}$"
+    version_pattern = r"^(\d+(\.\d+){0,2}|-|0|(\d\.){0,2}(\*))$"
 
     if not (re.match(version_pattern, version)):
         return False
     if not (re.match(version_pattern, target_version)):
+        return False
+
+    # Special case, * means "no upper boundry"
+    if version == "*":
+        return True
+
+    if match_semver_equal(version, target_version) == True:
         return False
 
     version_parts = version.split(".")
@@ -292,31 +309,29 @@ def match_semver_less(version, target_version):
     normalize_semver(version_parts)
     normalize_semver(target_parts)
 
-    if int(version_parts[0]) > int(target_parts[0]):
-        return True
-
-    if int(version_parts[0]) < int(target_parts[0]):
-        return False
-
-    if int(version_parts[1]) > int(target_parts[1]):
-        return True
-
-    if int(version_parts[1]) < int(target_parts[1]):
-        return False
-
-    if int(version_parts[2]) > int(target_parts[2]):
-        return True
+    for i in range(3):
+        if version_parts[i] == "*":
+            return True
+        elif int(version_parts[i]) != int(target_parts[i]):
+            return int(version_parts[i]) > int(target_parts[i])
 
     return False
 
 
 def match_semver_greater(version, target_version):
-    version_pattern = r"^\d+(\.\d+){0,2}$"
+    version_pattern = r"^(\d+(\.\d+){0,2}|-|0|(\d\.){0,2}(\*))$"
 
     if not (re.match(version_pattern, version)):
         return False
     if not (re.match(version_pattern, target_version)):
         return False
+
+    # Special case, - means "all", 0 means "first available", * means "no upper boundry"
+    if version == "-" or version == "*" or version == "0":
+        return True
+
+    if match_semver_equal(version, target_version):
+        return True
 
     version_parts = version.split(".")
     target_parts = target_version.split(".")
@@ -325,21 +340,11 @@ def match_semver_greater(version, target_version):
     normalize_semver(version_parts)
     normalize_semver(target_parts)
 
-    # Compare major and minor versions
-    if int(version_parts[0]) < int(target_parts[0]):
-        return True
-
-    if int(version_parts[0]) > int(target_parts[0]):
-        return False
-
-    if int(version_parts[1]) < int(target_parts[1]):
-        return True
-
-    if int(version_parts[1]) > int(target_parts[1]):
-        return False
-
-    if int(version_parts[2]) < int(target_parts[2]):
-        return True
+    for i in range(3):
+        if version_parts[i] == "*":
+            return True
+        elif int(version_parts[i]) != int(target_parts[i]):
+            return int(version_parts[i]) < int(target_parts[i])
 
     return False
 
@@ -634,7 +639,9 @@ class CVEDatabase(Database):
 
         return "not affected"
 
-    def update_status(self, d, product, version, pn, vendor, cve_data, cves_status, loop):
+    def update_status(
+        self, d, product, version, pn, vendor, cve_data, cves_status, loop
+    ):
         if vendor == "%":
             vendor = "*"
 
@@ -667,14 +674,26 @@ class CVEDatabase(Database):
                         cve,
                         {"abbrev-status": "Patched", "status": "version-not-in-range"},
                     )
-                
+
                 if "cpes" in pr[1].keys():
                     for cpe in pr[1]["cpes"]:
                         cpe_vendor = cpe.split(":")[3]
                         cpe_product = cpe.split(":")[4]
                         if f"{cpe_vendor}-{cpe_product}" not in loop:
-                            if cpe_vendor.lower() != vendor.lower() or cpe_product != product:
-                                self.update_status(d, cpe_product, version, pn, cpe_vendor, cve_data, cves_status, loop)
+                            if (
+                                cpe_vendor.lower() != vendor.lower()
+                                or cpe_product != product
+                            ):
+                                self.update_status(
+                                    d,
+                                    cpe_product,
+                                    version,
+                                    pn,
+                                    cpe_vendor,
+                                    cve_data,
+                                    cves_status,
+                                    loop,
+                                )
 
     def get_cve_info(self, cve_data):
         for cve in cve_data:
