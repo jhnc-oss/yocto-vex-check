@@ -21,6 +21,7 @@ class SemverTest(unittest.TestCase):
         ["1.1", "1.1.0"],
         ["1", "1.0.0"],
         ["2.3.4", "2.3.4"],
+        ["0", "0.0.0"],
     ]
     # Last element is smaller than the first one
     less_versions = [
@@ -33,6 +34,7 @@ class SemverTest(unittest.TestCase):
         ["3.5.12", "3.6.1"],
         ["3.5.12", "4.0"],
         ["3.5", "3.5.1"],
+        ["0", "1.0.0"],
     ]
 
     def test_is_semver(self):
