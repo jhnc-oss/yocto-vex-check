@@ -44,6 +44,8 @@ class OpenSSLVersionTest(unittest.TestCase):
         self.assertEqual(match_custom_greater("1.0.2a-dev", "1.0.2a"), True)
         self.assertEqual(match_custom_greater("1.1.1", "1.1.1.1"), True)
         self.assertEqual(match_custom_greater("1.1.1f", "1.1.1.1"), True)
+        self.assertEqual(match_custom_greater("1.1.1", "0"), False)
+        self.assertEqual(match_custom_greater("0", "1.1.1"), True)
 
     def test_less(self):
         # Last argument should be smaller than the first one
@@ -53,15 +55,19 @@ class OpenSSLVersionTest(unittest.TestCase):
         self.assertEqual(match_custom_less("1.0.2a", "1.0.2a-dev"), True)
         self.assertEqual(match_custom_less("1.1.1.1", "1.1.1"), True)
         self.assertEqual(match_custom_less("1.1.1.1", "1.1.1f"), True)
+        self.assertEqual(match_custom_less("1.1.1.1", "0"), True)
+        self.assertEqual(match_custom_less("0", "1.1.1.1"), False)
 
     def test_less_equal(self):
         # Last argument should be smaller than the first one or equal
         self.assertEqual(match_custom_less_equal("1.1", "1.0.2"), True)
         self.assertEqual(match_custom_less_equal("1.1", "1.1.0"), True)
+        self.assertEqual(match_custom_less_equal("1.0.2", "1.1"), False)
         self.assertEqual(match_custom_less_equal("1.0.2-dev", "1.0.2"), True)
         self.assertEqual(match_custom_less_equal("1.0.2b", "1.0.2a"), True)
         self.assertEqual(match_custom_less_equal("1.0.2a", "1.0.2a"), True)
         self.assertEqual(match_custom_less_equal("1.0.2a", "1.0.2a-dev"), True)
+        self.assertEqual(match_custom_less_equal("1.0.2a", "1.1.1"), False)
 
 
 if __name__ == "__main__":
