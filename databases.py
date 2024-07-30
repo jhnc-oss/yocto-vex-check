@@ -147,12 +147,12 @@ def is_supported_custom(version):
     return False
 
 
-def match_custom(version, target_version):
+def match_custom_equal(version, target_version):
     semver_pattern = r"^\d+(\.\d+){0,2}$"
     openssl_pattern = r"^\d+(\.\d+)*[a-z]*(-dev)?$"
 
     if re.match(semver_pattern, version) and re.match(semver_pattern, target_version):
-        return match_semver(version, target_version)
+        return match_semver_equal(version, target_version)
     elif re.match(openssl_pattern, version) and re.match(
         openssl_pattern, target_version
     ):
@@ -163,11 +163,7 @@ def match_custom(version, target_version):
     return False
 
 
-def match_semver(version, target_version):
-    # Special case, 0 means "first available"
-    if version == "0":
-        return True
-
+def match_semver_equal(version, target_version):
     version_parts = version.split(".")
     target_parts = target_version.split(".")
 
@@ -226,7 +222,7 @@ def match_custom_less_equal(version, target_version):
     elif re.match(openssl_pattern, version) and re.match(
         openssl_pattern, target_version
     ):
-        if match_custom(version, target_version):
+        if match_custom_equal(version, target_version):
             return True
         else:
             return match_custom_less(version, target_version)
@@ -275,7 +271,7 @@ def match_semver_less_equal(version, target_version):
     if match_semver_less(version, target_version) == True:
         return True
 
-    if match_semver(version, target_version) == True:
+    if match_semver_equal(version, target_version) == True:
         return True
 
     return False
@@ -620,10 +616,10 @@ class CVEDatabase(Database):
                         entry["lessThan"], version
                     ) and match_semver_greater(entry["version"], version):
                         return "affected"
-                elif match_semver(entry["version"], version):
+                elif match_semver_equal(entry["version"], version):
                     return "affected"
             elif entry["status"] == "affected" and entry["versionType"] == "custom":
-                if match_custom(entry["version"], version):
+                if match_custom_equal(entry["version"], version):
                     return "affected"
                 elif "lessThanOrEqual" in entry:
                     if match_custom_less_equal(
