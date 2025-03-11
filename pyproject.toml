@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "yocto-vex-check"
+version = "1.0.0"
+description = "A tool for known vulnerability scanning of a Yocto Project build"
+readme = "README"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+keywords = ["setuptools", "development", "yoctoproject", "vulnerabilities"]
+
+authors = [
+{ name = "Marta Rybczynska", email = "marta.rybczynska@ygreky.com" },
+{ name = "Samantha Jalabert", email = "samantha.jalabert@syslinbit.com" },
+]
+
+maintainers = [
+  { name = "Marta Rybczynska", email = "marta.rybczynska@ygreky.com" },
+]
+
+classifiers = [
+  "Development Status :: 3 - Alpha",
+
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Build Tools",
+
+  "License :: OSI Approved :: MIT License",
+
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3 :: Only",
+]
+
+dependencies = []
+
+[project.optional-dependencies]
+test = ["unittest"]
+
+[project.urls]
+"Homepage" = "https://gitlab.com/syslinbit/public/yocto-vex-check/"
+"Bug Reports" = "https://gitlab.com/syslinbit/public/yocto-vex-check/-/issues"
+"Source" = "https://gitlab.com/syslinbit/public/yocto-vex-check/"
+
+# The following would provide a command line executable called `sample`
+# which executes the function `main` from this package when invoked.
+#[project.scripts]
+#sample = "sample:main"
+
+#[tool.setuptools]
+# If there are data files included in your packages that need to be
+# installed, specify them here.
+#package-data = { "sample" = ["*.dat"] }
