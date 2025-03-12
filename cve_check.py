@@ -416,6 +416,9 @@ def cve_save_summary_handler(d):
     if os.path.exists(cvelogpath):
         if d.getVar("CVE_CHECK_FORMAT_JSON") == "1":
             for el in os.listdir(cvelogpath):
+                _, file_extension = os.path.splitext(el)
+                if file_extension != '.json':
+                    continue
                 with open(os.path.join(cvelogpath, el)) as f:
                     data = json.load(f)
 
