@@ -5,19 +5,16 @@
 # SPDX-License-Identifier: MIT
 #
 
-import os, sys
 import unittest
-import json
-from databases import is_semver
-from databases import match_semver_less
-from databases import match_semver_equal
-from databases import match_semver_less_equal
-from databases import match_semver_greater
+import traceback
+from versions import SemanticVersioning
 
 
 class TestSemverVersion(unittest.TestCase):
     versions = ["0", "-", "1.0", "1.0.0", "1.*", "*", "unspecified", "4.22.132"]
     false_versions = ["1.1.1.1", "1.0.2b", "1.0.2-dev", "not-a-version"]
+
+    #version is greather then limit
     greater_version = [
         {"version": "1.1", "limit": "1.0"},
         {"version": "1.0.1", "limit": "1.0"},
@@ -29,6 +26,8 @@ class TestSemverVersion(unittest.TestCase):
         {"version": "4.0", "limit": "3.5.12"},
         {"version": "3.5.1", "limit": "3.5"},
     ]
+
+    #version is lesser then limit
     lesser_version = [
         {"version": "1.0", "limit": "2.*"},
         {"version": "1.0", "limit": "2.0"},
@@ -66,27 +65,35 @@ class TestSemverVersion(unittest.TestCase):
 
     def test_is_semver(self):
         for v in self.versions:
-            self.assertEqual(is_semver(v), True)
+            try:
+                SemanticVersioning(v)
+            except Exception:
+                traceback.print_exc()
+                self.fail(v + "was falsly identifyed as unsupportet version")
+
         for el in self.false_versions:
-            self.assertEqual(is_semver(el), False)
+                self.assertRaises(ValueError, SemanticVersioning, el)
 
     def test_is_greater(self):
         for v in self.greater_version:
-            self.assertEqual(match_semver_greater(v["limit"], v["version"]), True)
+            self.assertTrue(SemanticVersioning(v["version"]) > SemanticVersioning(v["limit"]))
         for v in self.false_greater_versions:
-            self.assertEqual(match_semver_greater(v["limit"], v["version"]), False)
+            self.assertFalse(SemanticVersioning(v["version"]) > SemanticVersioning(v["limit"]))
 
     def test_is_lesser(self):
         for v in self.lesser_version:
-            self.assertEqual(match_semver_less(v["limit"], v["version"]), True)
+            self.assertTrue(SemanticVersioning(v["version"]) < SemanticVersioning(v["limit"]))
         for v in self.false_lesser_versions:
-            self.assertEqual(match_semver_less(v["limit"], v["version"]), False)
+            self.assertFalse(SemanticVersioning(v["version"]) < SemanticVersioning(v["limit"]))
 
     def test_is_equal(self):
         for v in self.equal_version:
-            self.assertEqual(match_semver_equal(v["limit"], v["version"]), True)
+            self.assertEqual(SemanticVersioning(v["version"]) == SemanticVersioning(v["limit"]),True)
+            self.assertEqual(SemanticVersioning(v["limit"]) == SemanticVersioning(v["version"]),True)
+
         for v in self.false_lesser_versions:
-            self.assertEqual(match_semver_equal(v["limit"], v["version"]), False)
+            self.assertEqual(SemanticVersioning(v["version"]) == SemanticVersioning(v["limit"]),False)
+            self.assertEqual(SemanticVersioning(v["limit"]) == SemanticVersioning(v["version"]),False)
 
 
 if __name__ == "__main__":

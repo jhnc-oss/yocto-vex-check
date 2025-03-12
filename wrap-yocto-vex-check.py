@@ -66,7 +66,7 @@ def main(argv):
             use_package_list_cve = False
             print("Coping SPDX files")
             output = subprocess.run(
-                [scan_tool, "spdx", "-b", args.build_dir, "-d", args.input_temporary_dir],
+                [sys.executable, scan_tool, "spdx", "-b", args.build_dir, "-d", args.input_temporary_dir],
                 capture_output=True,
                 text=True,
             )
@@ -82,6 +82,7 @@ def main(argv):
         print("Converting CVE JSON to input VEX")
         output = subprocess.run(
             [
+                sys.executable,
                 scan_tool,
                 "vex",
                 "-fc",
@@ -100,6 +101,7 @@ def main(argv):
         if use_package_list_cve:
             output = subprocess.run(
                 [
+                    sys.executable,
                     scan_tool,
                     "cve",
                     "-fc",
@@ -119,6 +121,7 @@ def main(argv):
         else:
             output = subprocess.run(
                 [
+                    sys.executable,
                     scan_tool,
                     "cve",
                     "-fs",

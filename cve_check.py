@@ -31,6 +31,8 @@ import shutil
 import time
 import os
 import json
+from logging import Logger
+
 from cve_check_lib import update_symlinks
 from cve_check_lib import get_patched_cves
 from cve_check_lib import cve_check_merge_jsons
@@ -44,7 +46,9 @@ from cve_check_lib import (
     get_package_info_spdx,
     get_package_info_cve,
 )
-from databases import NVDDatabase, CVEDatabase
+from nvd_database import NVDDatabase
+from cve_database import CVEDatabase
+#from databases import NVDDatabase, CVEDatabase
 from cve_check_map import CVE_CHECK_STATUSMAP as cve_map
 import datetime
 
@@ -416,6 +420,9 @@ def cve_save_summary_handler(d):
     if os.path.exists(cvelogpath):
         if d.getVar("CVE_CHECK_FORMAT_JSON") == "1":
             for el in os.listdir(cvelogpath):
+                _, file_extension = os.path.splitext(el)
+                if file_extension != '.json':
+                    continue
                 with open(os.path.join(cvelogpath, el)) as f:
                     data = json.load(f)
 
@@ -440,6 +447,7 @@ def do_cve_check(d):
             patched_cves = get_patched_cves(d)
         except FileNotFoundError:
             d.logger.error("Failure in searching patches")
+
         cve_data, status = check_cves(d, patched_cves)
         if len(cve_data) or (d.getVar("CVE_CHECK_COVERAGE") == "1" and status):
             get_cve_info(d, cve_data)
@@ -604,7 +612,7 @@ def get_cve_info(d, cve_data):
     """
     db = d.getDatabaseConnection()
 
-    db.get_cve_info(cve_data)
+    db.get_cve_info(d, cve_data)
 
     return cve_data
 
