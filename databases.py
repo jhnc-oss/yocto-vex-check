@@ -370,7 +370,7 @@ class Database:
         pass
 
     @abstractmethod
-    def update_status(self, d, product, pv, pn, vendor, cve_data, cves_status, loop):
+    def update_status(self, d, product, pv, pn, vendor, cve_data, cves_status):
         pass
 
 
@@ -386,7 +386,7 @@ class NVDDatabase(Database):
         else:
             return None
 
-    def update_status(self, d, product, pv, pn, vendor, cve_data, cves_status, loop):
+    def update_status(self, d, product, pv, pn, vendor, cve_data, cves_status):
         # Find all relevant CVE IDs.
         has_cves_in_product = False
         real_pv = d.getVar("PV")
