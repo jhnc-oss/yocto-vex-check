@@ -4,16 +4,9 @@
 #
 # SPDX-License-Identifier: MIT
 #
-
-import os, sys
+import traceback
 import unittest
-import json
-from databases import compute_openssl_version
-from databases import is_supported_custom
-from databases import match_custom_less
-from databases import match_custom_less_equal
-from databases import match_custom_greater
-
+from versions import OpenSSLVersioning, SemanticVersioning
 
 class OpenSSLVersionTest(unittest.TestCase):
     versions = [
@@ -30,44 +23,121 @@ class OpenSSLVersionTest(unittest.TestCase):
 
     def test_version_supported(self):
         for el in self.versions:
-            self.assertEqual(is_supported_custom(el["version"]), True)
+            try:
+                OpenSSLVersioning(el["version"])
+            except Exception:
+                traceback.print_exc()
+                self.fail("Detected unsupportet version")
 
     def test_versionning(self):
         for el in self.versions:
-            self.assertEqual(compute_openssl_version(el["version"]), el["result"])
+            osv = OpenSSLVersioning(el["version"])
+            self.assertEqual(osv._OpenSSLVersioning__normalize_open_ssl(el["version"]), el["result"])
 
     def test_greater(self):
-        # Last argument should be greater than the first one
-        self.assertEqual(match_custom_greater("1.0.2", "1.1"), True)
-        self.assertEqual(match_custom_greater("1.0.2-dev", "1.0.2"), True)
-        self.assertEqual(match_custom_greater("1.0.2a", "1.0.2b"), True)
-        self.assertEqual(match_custom_greater("1.0.2a-dev", "1.0.2a"), True)
-        self.assertEqual(match_custom_greater("1.1.1", "1.1.1.1"), True)
-        self.assertEqual(match_custom_greater("1.1.1f", "1.1.1.1"), True)
-        self.assertEqual(match_custom_greater("1.1.1", "0"), False)
-        self.assertEqual(match_custom_greater("0", "1.1.1"), True)
+        # Firs argument should be greater than the second one
+        self.assertEqual(OpenSSLVersioning("1.1") > OpenSSLVersioning("1.0.2"), True)
+        self.assertEqual(OpenSSLVersioning("1.0.2") > OpenSSLVersioning("1.0.2-dev"), True)
+        self.assertEqual(OpenSSLVersioning("1.0.2b") > OpenSSLVersioning("1.0.2a"), True)
+        self.assertEqual(OpenSSLVersioning("1.0.2a") > OpenSSLVersioning("1.0.2a-dev"), True)
+        self.assertEqual(OpenSSLVersioning("1.1.1.1") > OpenSSLVersioning("1.1.1"), True)
+        self.assertEqual(OpenSSLVersioning("1.1.1.1") > OpenSSLVersioning("1.1.1f"), True)
+        self.assertEqual(OpenSSLVersioning("0") > OpenSSLVersioning("1.1.1"), False)
+        self.assertEqual(OpenSSLVersioning("1.1.1") > OpenSSLVersioning("0"), True)
+
 
     def test_less(self):
-        # Last argument should be smaller than the first one
-        self.assertEqual(match_custom_less("1.1", "1.0.2"), True)
-        self.assertEqual(match_custom_less("1.0.2", "1.0.2-dev"), True)
-        self.assertEqual(match_custom_less("1.0.2b", "1.0.2a"), True)
-        self.assertEqual(match_custom_less("1.0.2a", "1.0.2a-dev"), True)
-        self.assertEqual(match_custom_less("1.1.1.1", "1.1.1"), True)
-        self.assertEqual(match_custom_less("1.1.1.1", "1.1.1f"), True)
-        self.assertEqual(match_custom_less("1.1.1.1", "0"), True)
-        self.assertEqual(match_custom_less("0", "1.1.1.1"), False)
+        # First argument should be smaller than the second one
+        self.assertEqual(OpenSSLVersioning("1.0.2") < OpenSSLVersioning("1.1"), True)
+        self.assertEqual(OpenSSLVersioning("1.0.2-dev") < OpenSSLVersioning("1.0.2"), True)
+        self.assertEqual(OpenSSLVersioning("1.0.2a") < OpenSSLVersioning("1.0.2b"), True)
+        self.assertEqual(OpenSSLVersioning("1.0.2a-dev") < OpenSSLVersioning("1.0.2a"), True)
+        self.assertEqual(OpenSSLVersioning("1.1.1") < OpenSSLVersioning("1.1.1.1"), True)
+        self.assertEqual(OpenSSLVersioning("1.1.1f") < OpenSSLVersioning("1.1.1.1"), True)
+        self.assertEqual(OpenSSLVersioning("0") < OpenSSLVersioning("1.1.1.1"), True)
+        self.assertEqual(OpenSSLVersioning("1.1.1.1") < OpenSSLVersioning("0"), False)
 
     def test_less_equal(self):
-        # Last argument should be smaller than the first one or equal
-        self.assertEqual(match_custom_less_equal("1.1", "1.0.2"), True)
-        self.assertEqual(match_custom_less_equal("1.1", "1.1.0"), True)
-        self.assertEqual(match_custom_less_equal("1.0.2", "1.1"), False)
-        self.assertEqual(match_custom_less_equal("1.0.2", "1.0.2-dev"), True)
-        self.assertEqual(match_custom_less_equal("1.0.2b", "1.0.2a"), True)
-        self.assertEqual(match_custom_less_equal("1.0.2a", "1.0.2a"), True)
-        self.assertEqual(match_custom_less_equal("1.0.2a", "1.0.2a-dev"), True)
-        self.assertEqual(match_custom_less_equal("1.0.2a", "1.1.1"), False)
+        # First argument should be smaller than the second one or equal
+        self.assertEqual(OpenSSLVersioning("1.0.2") <= OpenSSLVersioning("1.1"), True)
+        self.assertEqual(OpenSSLVersioning("1.1.0") <= OpenSSLVersioning("1.1"), True)
+        self.assertEqual(OpenSSLVersioning("1.1") <= OpenSSLVersioning("1.0.2"), False)
+        self.assertEqual(OpenSSLVersioning("1.0.2-dev") <= OpenSSLVersioning("1.0.2"), True)
+        self.assertEqual(OpenSSLVersioning("1.0.2a") <= OpenSSLVersioning("1.0.2b"), True)
+        self.assertEqual(OpenSSLVersioning("1.0.2a") <= OpenSSLVersioning("1.0.2a"), True)
+        self.assertEqual(OpenSSLVersioning("1.0.2a-dev") <= OpenSSLVersioning("1.0.2a"), True)
+        self.assertEqual(OpenSSLVersioning("1.1.1") <= OpenSSLVersioning("1.0.2a"), False)
+
+
+    def test_greater_equal(self):
+        # First argument should be greater than or equal to the second one
+        self.assertEqual(OpenSSLVersioning("1.1") >= OpenSSLVersioning("1.0.2"), True)
+        self.assertEqual(OpenSSLVersioning("1.1") >= OpenSSLVersioning("1.1.0"), True)
+        self.assertEqual(OpenSSLVersioning("1.0.2") >= OpenSSLVersioning("1.1"), False)
+        self.assertEqual(OpenSSLVersioning("1.0.2") >= OpenSSLVersioning("1.0.2-dev"), True)
+        self.assertEqual(OpenSSLVersioning("1.0.2b") >= OpenSSLVersioning("1.0.2a"), True)
+        self.assertEqual(OpenSSLVersioning("1.0.2a") >= OpenSSLVersioning("1.0.2a"), True)
+        self.assertEqual(OpenSSLVersioning("1.0.2a") >= OpenSSLVersioning("1.0.2a-dev"), True)
+        self.assertEqual(OpenSSLVersioning("1.0.2a") >= OpenSSLVersioning("1.1.1"), False)
+
+    def test_equal(self):
+        # First argument should be equal to the second one
+        self.assertEqual(OpenSSLVersioning("1.1") == OpenSSLVersioning("1.1.0"), True)
+        self.assertEqual(OpenSSLVersioning("1.1") == OpenSSLVersioning("1.1"), True)
+        self.assertEqual(OpenSSLVersioning("1.0.2") == OpenSSLVersioning("1.0.2"), True)
+        self.assertEqual(OpenSSLVersioning("1.0.2-dev") == OpenSSLVersioning("1.0.2-dev"), True)
+        self.assertEqual(OpenSSLVersioning("1.0.2a") == OpenSSLVersioning("1.0.2a"), True)
+        self.assertEqual(OpenSSLVersioning("1.1.1") == OpenSSLVersioning("1.1.1"), True)
+        self.assertEqual(OpenSSLVersioning("1.1.1f") == OpenSSLVersioning("1.1.1f"), True)
+        self.assertEqual(OpenSSLVersioning("0") == OpenSSLVersioning("0"), True)
+        self.assertEqual(OpenSSLVersioning("1.1.1.1") == OpenSSLVersioning("1.1.1.1"), True)
+
+    def test_comparison_with_semantic_versioning(self):
+        # Assuming SemanticVersioning is another versioning class
+        semantic_version = SemanticVersioning("1.1.0")
+        openssl_version = OpenSSLVersioning("1.1.0")
+
+        # Test comparison between OpenSSLVersioning and SemanticVersioning
+        with self.assertRaises(TypeError):
+            _ = openssl_version > semantic_version
+        with self.assertRaises(TypeError):
+            _ = openssl_version < semantic_version
+        with self.assertRaises(TypeError):
+            _ = openssl_version >= semantic_version
+        with self.assertRaises(TypeError):
+            _ = openssl_version <= semantic_version
+        with self.assertRaises(TypeError):
+            _ = openssl_version == semantic_version
+
+    def test_comparison_with_non_versioning_objects(self):
+        openssl_version = OpenSSLVersioning("1.1.0")
+
+        # Test comparison with non-versioning objects
+        with self.assertRaises(TypeError):
+            _ = openssl_version > "1.1.0"
+        with self.assertRaises(TypeError):
+            _ = openssl_version < "1.1.0"
+        with self.assertRaises(TypeError):
+            _ = openssl_version >= "1.1.0"
+        with self.assertRaises(TypeError):
+            _ = openssl_version <= "1.1.0"
+        with self.assertRaises(TypeError):
+            _ = openssl_version == "1.1.0"
+
+    def test_comparison_with_none(self):
+        openssl_version = OpenSSLVersioning("1.1.0")
+
+        # Test comparison with None
+        with self.assertRaises(TypeError):
+            _ = openssl_version > None
+        with self.assertRaises(TypeError):
+            _ = openssl_version < None
+        with self.assertRaises(TypeError):
+            _ = openssl_version >= None
+        with self.assertRaises(TypeError):
+            _ = openssl_version <= None
+        with self.assertRaises(TypeError):
+            _ = openssl_version == None
 
 
 if __name__ == "__main__":
