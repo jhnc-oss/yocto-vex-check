@@ -39,7 +39,9 @@ classifiers = [
   "Programming Language :: Python :: 3 :: Only",
 ]
 
-dependencies = []
+dependencies = [
+    "zstandard"
+]
 
 [project.optional-dependencies]
 test = ["unittest"]
@@ -49,10 +51,10 @@ test = ["unittest"]
 "Bug Reports" = "https://gitlab.com/syslinbit/public/yocto-vex-check/-/issues"
 "Source" = "https://gitlab.com/syslinbit/public/yocto-vex-check/"
 
-# The following would provide a command line executable called `sample`
-# which executes the function `main` from this package when invoked.
-#[project.scripts]
-#sample = "sample:main"
+# Installed executables
+[project.scripts]
+yocto-vex-check = "yocto_vex_check:main"
+wrap-yocto-vex-check = "wrap_yocto_vex_check:main"
 
 #[tool.setuptools]
 # If there are data files included in your packages that need to be

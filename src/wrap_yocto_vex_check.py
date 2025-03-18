@@ -20,7 +20,7 @@ from pathlib import Path
 # python yocto-vex-check.py cve -fs data_input/spdx-sum.json -fv data_input/vex-summary.json -d data_output/
 
 
-def main(argv):
+def main():
     parser = argparse.ArgumentParser(
         description="wrap-yocto-vex-check - Wrap vulnerabiliy checking for OE-core"
     )
@@ -50,10 +50,10 @@ def main(argv):
         help="Vulnerability database to use: CVE or NVD (default)",
     )
 
-    args = parser.parse_args(argv)
+    args = parser.parse_args()
 
     scan_tool = os.path.join(
-        os.path.dirname(os.path.realpath(sys.argv[0])), "yocto-vex-check.py"
+        os.path.dirname(os.path.realpath(sys.argv[0])), "yocto-vex-check"
     )
 
     try:
@@ -148,4 +148,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()

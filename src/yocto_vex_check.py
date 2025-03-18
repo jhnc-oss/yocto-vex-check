@@ -393,13 +393,22 @@ def create_parser():
     return parser
 
 
-def main(argv):
+def interruption(signum, frame):
+    signame = signal.Signals(signum).name
+    logger.warning(f"Signal handler called with signal {signame}")
+    sys.exit(0)
+
+
+def main():
     global default_log_level
     FORMAT = "[%(asctime)s %(filename)s->%(funcName)s():%(lineno)s]%(levelname)s: %(message)s"
     logging.basicConfig(format=FORMAT, level=default_log_level)
 
+    signal.signal(signal.SIGINT, interruption)
+    signal.signal(signal.SIGTERM, interruption)
+
     parser = create_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args()
 
     if args.func is None:
         parser.print_help()
@@ -429,14 +438,5 @@ def main(argv):
         sys.exit(1)
 
 
-def interruption(signum, frame):
-    signame = signal.Signals(signum).name
-    logger.warning(f"Signal handler called with signal {signame}")
-    sys.exit(0)
-
-
 if __name__ == "__main__":
-    signal.signal(signal.SIGINT, interruption)
-    signal.signal(signal.SIGTERM, interruption)
-
-    main(sys.argv[1:])
+    main()
